@@ -1,0 +1,107 @@
+# -*- coding: utf-8 -*-
+"""
+Created on Sat Feb  3 18:27:06 2024
+
+@author: elgin
+"""
+
+import numpy as np
+import pandas as pd
+import os
+from statsmodels.formula.api import ols
+import statsmodels.api as sm  
+from scipy.stats import pearsonr
+pd.options.display.max_columns = None
+
+#Set the directory
+os.chdir('/Users/elgin/OneDrive/Desktop/Python/Data')
+
+#ECO 508 HW2 Danielle Bauer & Kyle Bailey
+
+#Question 1(i)
+#Holding expendB and prtystrA constant, a 1% increase in expendA results in a 
+#(β1/100)% increase in voteA
+
+#Question 1(ii)
+#H0: β2 = – β1 or H0: β1 + β2 = 0
+
+#Question 1(iii)
+vote1 = pd.read_csv('vote1.csv')
+vote1.head()
+vote1.isnull().sum()
+
+
+m1_1 = ols('voteA ~ np.log(expendA) + np.log(expendB) + prtystrA', data=vote1).fit()
+m1_1.summary()
+#voteA = 45.0789 + 6.0833*log(expendA) - 6.6154*log(expendB) + 0.1520*prtystrA
+#R-Squared = 0.793
+#Sample Size = 173
+
+#Yes, both expendA and expendB are statistically significant at the 1% 
+#significance level
+#Holding expendB and prtystrA constant, a 1% increase in expendA results in a
+#0.06% increase in voteA
+#Holding expendA and prtystrA constant, a 1% increase in expendB results in a 
+#0.06% decrease in voteA
+
+#No we cannot test the null hypothesis because we don't have the std error of
+#β1 + β2 
+
+#Take θ = β1 + β2 and rearrange to get β1 = θ – β2
+#Plug into voteA = β0 + (θ – β2)*log(expendA) + β2*log(expendB) + β3*prtystrA + u
+#and get: 
+#voteA = β0 + θ*log(expendA) + β2[log(expendB) – log(expendA)] + β3*prtystrA + u
+
+vote1['log_expendB_log_expendA'] = np.log(vote1['expendB']) - np.log(vote1['expendA'])
+m1_2 = ols('voteA ~ np.log(expendA) + log_expendB_log_expendA + prtystrA', data=vote1).fit()
+m1_2.summary()
+
+#Since the t-stat for θ is ≈ -1, we fail to reject the null, meaning that the effect 
+#that log(expendA) has on voteA is offset by log(expendB)
+
+#Question 3
+hprice1 = pd.read_csv('hprice1.csv')
+hprice1.head() 
+hprice1.isnull().sum()
+
+#Question 3(i&ii)
+m3_1 = ols('np.log(price) ~ sqrft + bdrms', data=hprice1).fit()
+m3_1.summary()
+#Take θ = 150*β1 + β2 and rearrange to get β2 = θ - 150*β1
+#Plug into log(price) = β0 + β1*sqrft + (θ - 150*β1)*bdrms + u
+#and get:
+#log(price) = β0 + θ*bdrms + β1(sqrft - 150*bdrms) + u
+
+hprice1['sqrft_150bdrms'] = (hprice1['sqrft'] - (150*hprice1['bdrms']))
+m3_2 = ols('np.log(price) ~ bdrms + sqrft_150bdrms', data=hprice1).fit()
+m3_2.summary()
+#θ = 0.0858 
+
+#Question 3(iii)
+#Std Error of θ = 0.027 
+0.0858 + (1.96*0.027)
+#0.13872
+0.0858 - (1.96*0.027)
+#0.03288
+#The 95% CI = [0.033,0.139] 
+
+#Question 6(i&ii)
+#lwage = β0 + β1*educ + β2*exper + β3*tenure + u
+#H0: β2 = β3
+#Take θ = β2 - β3 and rearrange to get β2 = θ + β3
+#Plug into lwage = β0 + β1*educ + (θ + β3)*exper + β3*tenure + u
+#and get:
+# lwage = β0 + β1*educ + θ*exper + β3(exper + tenure) + u
+
+wage2 = pd.read_csv('wage2.csv')
+wage2.head()
+wage2.isnull().sum()
+
+wage2['exper_and_tenure'] = wage2['exper'] + wage2['tenure']
+m6_1 = ols('lwage ~ educ+ exper + exper_and_tenure', data=wage2).fit()
+m6_1.summary()
+m6_1.params
+m6_1.conf_int(0.05)  
+m6_1.conf_int(0.05).iloc[[2]]   
+#Since the CI does include zero, we fail to reject the null, meaning
+#that exper and tenure do have a same effect on lwage.
