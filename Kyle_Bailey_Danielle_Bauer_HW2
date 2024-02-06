@@ -105,3 +105,107 @@ m6_1.conf_int(0.05)
 m6_1.conf_int(0.05).iloc[[2]]   
 #Since the CI does include zero, we fail to reject the null, meaning
 #that exper and tenure do have a same effect on lwage.
+
+# Question 8(i)
+
+df8 = pd.read_csv('/Users/Kyle/Desktop/Python/Data/ksubs.csv')
+df8.head()
+df8.isnull().sum()
+
+df8_f1 = df8[df8['fsize']==1]
+df8_f1.shape
+df8_f1.head()
+# There are 2017 single person households in the data set
+
+# Question 8(ii)
+
+m8_2 = ols('nettfa ~ inc + age', data=df8_f1).fit()
+m8_2.summary()
+# nettfa = -43.0398 + 0.7993*inc + 0.8427*age
+# The slope on income reads for a one unit ($1000) increase in annual income, we can expect a 0.7993
+# unit ($799.3) increase in net total financial assets
+# The slope on age means that for a one year increase in age, we can expect a 0.8427 unit ($842.7)
+# increase in net total financial assets
+
+# Question 8(iii)
+
+# The intercept does not have a lot of meaning, no. All else held to 0, (including age which
+# wouldn't make much sense here) you could expect to have -$43,039.80 in net financial assets.
+
+# Question 8(iv)
+
+#t_stat = (Beta_hat - 1)/se(beta_hat)
+m8_2.bse
+#0.092017
+#t-stat:
+(0.8427 - 1) / 0.092017   #-1.70947
+t.cdf(x=-1.70947, df=2014)
+#p-value is one-tailed area under the curve of t-dist with df: 2014 (n=2017, k=2, 2017-2-1=2014) below t_stat (-1.70947)
+# 0.0438
+# At the 1% significance level, we fail to reject the null hypothesis that b2 = 1
+
+# Question 8(v)
+
+m8_5 = ols('nettfa ~ inc', data=df8_f1).fit()
+m8_5.summary()
+# nettfa = -10.5710 + 0.8207*inc
+# The coefficient on inc does not change much (0.7993 vs 0.8207), this is likely because (in theory)
+# income is far more likely to be correlated with net financial assets than age. Two individuals can be the same
+# age and make wildly different incomes
+pearsonr(df8_f1['nettfa'],df8_f1['inc'])
+# The correlation coefficient between the two variables is -.2875, meaning they are fairly correlated within the data.
+
+# Question 9(i)
+
+df9 = pd.read_csv('/Users/Kyle/Desktop/Python/Data/DISCRIM.csv')
+df9.isnull().sum()
+df9 = df9.dropna(subset=['lincome', 'prpblck', 'lpsoda', 'prppov', 'lhseval'])
+df9.head()
+
+m9_1 = ols('lpsoda ~ prpblck + lincome + prppov', data = df9).fit()
+m9_1.summary()
+# lpsoda = -1.4633 + 0.0728prpblck + 0.1370 + 0.3804prppov
+m9_1.bse
+# 0.030676
+# t-stat = (Beta_hat - 1)/se(beta_hat)
+(0.0728-1/0.030676) #-32.52597
+t.cdf(x=-32.52597, df=397)
+# At the 5% significance level, we reject the null hypothesis (0.018 < 0.05).
+# At the 1% significance level, we fail to reject the null hypothesis (0.018 > 0.01).
+
+# Question 9(ii)
+
+pearsonr(df9.lincome,df9.prppov)
+# The variables lincome and prppov are highly correlated with a Pearson correlation coefficient
+# of -0.8402.
+# t-stat lincome: 5.119, p-value: 0.000
+# t-stat prppov: 2.864, p-value: 0.004
+# both variables are highly statistically significant (both p-values significant at the 1% level).
+
+# Question 9(iii)
+
+m9_2 = ols('lpsoda ~ prpblck + lincome + prppov + lhseval', data = df9).fit()
+m9_2.summary()
+# lpsoda = -0.8415 + 0.0976prpblck - 0.0530lincome + 0.0521prppov + 0.1213lhseval
+# For a one percent increase in housing value, we can expect a .1213 percent increase
+# in predicted price. 
+# p-value = 0.000
+
+# Question 9(iv)
+
+# The variables lincome & prppov are no longer statistically significant following the 
+# inclusion of lhseval (p-values 0.159 & 0.699, respectively)
+m9_2_ur = ols('lpsoda ~ prpblck + lhseval + lincome + prppov', data=df9).fit()
+m9_2_r = ols('lpsoda ~ prpblck + lhseval', data=df9).fit()
+sm.stats.anova_lm(m9_2_r, m9_2_ur)
+# p-value 0.03
+# The variables are jointly significant at the 5% significance level.
+# The variables are all highly correlated so all of their inclusion is likely to 
+# skew the significance.
+
+# Question 9(v)
+
+# In determining which model is more reliable in determining if racial makeups of zip codes
+# influence fast food prices model 9_2 from question (iii) is superior. prpblck (and lhseval) 
+# is significant at the 1% level and the other two are jointly significant at the 5% level.
+# Additionally, the model has a higher r2 and thus more explanatory power.
