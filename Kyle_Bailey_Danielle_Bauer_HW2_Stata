@@ -92,3 +92,82 @@ gen exper_and_tenure = (exper + tenure)
 regress lwage educ exper exper_and_tenure
 *Since the CI does include zero, we fail to reject the null, meaning
 *that exper and tenure do have a same effect on lwage.
+
+* Question 8(i)
+clear
+insheet using "ksubs.csv", comma names
+drop if fsize != 1
+describe
+* There are 2017 single person households in the data set
+
+* Question 8(ii)
+
+reg nettfa inc age 
+* nettfa = -43.0398 + 0.7993*inc + 0.8427*age
+* The slope on income reads for a one unit ($1000) increase in annual income, we can expect a 0.7993 unit ($799.3) increase in net total financial assets
+* The slope on age means that for a one year increase in age, we can expect a 0.8427 unit ($842.7) increase in net total financial assets
+
+* Question 8(iii)
+* The intercept does not have a lot of meaning, no. All else held to 0, (including age which wouldn't make much sense here) 
+* you could expect to have -$43,039.80 in net financial assets.
+
+* Question 8(iv)
+ttest age == 1
+* p-value is one-tailed area under curve of t-dist with df: 2014 (n=2017, k=2, 2017-2-1=2014) below t_stat (-1.70947)
+* 0.0438
+* At the 1% significance level, we fail to reject the null hypothesis that b2 = 1
+
+* Question 8(v)
+reg nettfa inc
+* nettfa = -10.5710 + 0.8207*inc
+* The coefficient on inc does not change much (0.7993 vs 0.8207), this is likely because (in theory) income is far more likely to be correlated with net financial asssets than age. 
+* Two individuals can be the same age and make wildly different incomes
+corr nettfa inc
+* The correlation coefficient between the two variables is .2875, meaning they are fairly correlated within the data.
+
+* Question 9(i)
+
+clear 
+insheet using "discrim.csv", comma names
+gen prpblck1 = real(prpblck)
+gen lincome1 = real(lincome)
+gen lpsoda1 = real(lpsoda)
+gen lhseval1 = real(lhseval)
+gen prppov1 = real(prppov)
+drop if missing(lincome1, prpblck1, lpsoda1, prppov1, lhseval1)
+mdesc
+
+
+reg lpsoda1 prpblck1 lincome1 prppov1
+* lpsoda = -1.4633 + 0.0728prpblck + 0.1370 + 0.3804prppov
+* At the 5% significance level, we reject the null hypothesis (0.018 < 0.05).
+* At the 1% significance level, we fail to reject the null hypothesis (0.018 > 0.01).
+
+* Question 9(ii)
+
+corr lincome1 prppov1
+* The variables lincome and prppov are highly correlated with a Pearson correlation coefficient of -0.8402.
+* t-stat lincome: 5.119, p-value: 0.000
+* t-stat prppov: 2.864, p-value: 0.004
+* both variables are highly statistically significant (both p-values significant at the 1% level).
+
+* Question 9(iii)
+
+reg lpsoda1 prpblck1 lincome1 prppov1 lhseval1
+* lpsoda = -0.8415 + 0.0976prpblck - 0.0530lincome + 0.0521prppov + 0.1213lhseval
+* For a one percent increase in housing value, we can expect a .1213 percent increase in predicted price. 
+* p-value = 0.000
+
+* Question 9(iv)
+
+* The variables lincome & prppov are no longer statistically significant following the inclusion of lhseval (p-values 0.159 & 0.699, respectively)
+test lincome1=prppov1=0
+* p-value = 0.03
+* The variables are jointly significant at the 5% significance level.
+* The variables are all highly correlated so all of their inclusion is likely to  skew the significance
+
+* Question 9(v)
+
+* In determining which model is more reliable in determining if racial makeups of zip codes influence fast food prices model 9_2 from 
+* question (iii) is superior. prpblck (and lhseval) is significant at the 1% level and the other two are jointly significant at the 5% level. 
+* Additionally, the model has a higher r2 and thus more explanatory power.
