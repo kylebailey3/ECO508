@@ -1,0 +1,121 @@
+# -*- coding: utf-8 -*-
+"""
+Created on Wed Feb  7 22:48:57 2024
+
+@author: elgin
+"""
+
+
+import pandas as pd
+import os
+from statsmodels.formula.api import ols
+import statsmodels.api as sm 
+from statsmodels.sandbox.regression.gmm import IV2SLS
+pd.options.display.max_columns = None
+import numpy as np
+import statsmodels.formula.api as smf
+import scipy.stats as si
+
+
+#ECO 508 HW3 Kyle Bailey & Danielle Bauer
+os.chdir('/Users/elgin/OneDrive/Desktop/Python/Data')
+
+df3_1 = pd.read_excel('nels_small.xlsx')
+df3_1.head()
+df3_1.isnull().sum()
+
+# Question 3.1(a)
+
+condition = (df3_1['PSECHOICE']==2) | (df3_1['PSECHOICE']==3)
+df3_1['COLLEGE']=0 
+df3_1.loc[condition, 'COLLEGE'] = 1
+
+percent = (np.sum(df3_1['COLLEGE']==1) / 1000)
+print(percent)
+# 77.8% of all high school graduates attended either a 2-yr or 4-yr college
+
+# Question 3.1(b)
+
+m3_1 = smf.logit("COLLEGE ~ GRADES + FAMINC + FAMSIZ + PARCOLL + FEMALE + BLACK", data=df3_1).fit()
+m3_1.summary()
+# Yes, all of the signs of the coefficients are as expected. Since in GRADES, 1 represents the highest grade and
+# 13 is the lowest grade, we expect that it'll be negatively related to going to college. Students
+# from wealthier families are more likely to attend college, so as income increases, so should the
+# the likelihood they attended college, therefore, FAMINC should be positive. Resources ares spread more thinly
+# the more children a family has, so FAMSIZ should be negatively related to college attendence. 
+# Also, parents' education level is highly correlated with children's education level, so we expected
+# PARCOLL to be positive. We don't have any solid expectations about BLACK or FEMALE, except that
+# females usually tend to be more educated than males, which is consistent with the variable's coefficient sign.
+
+# No, not all of the coefficients are statistically significant at the 0.05 significance level. 
+# Specifically, FAMSIZ and FEMALE are not.
+
+# Question 3.1(c)
+
+# Holding other variables constant, one unit increase in GRADES is associated with the odds
+# of the outcome being multiplied by e^(-0.5174) units (or by 0.6)
+# Holding other variables constant, one unit increase in FAMINC is associated with the odds
+# of the outcome being multiplied by e^(0.0130) units (or by 1.01)
+# We fail to reject the null hypothesis (H0: β3=0), the estimated coefficient is not 
+# statistically different from 0, COLLEGE and FAMSIZ have no statistically significant relationship.
+# Holding other variables constant, the group PARCOLL=1 has e^(0.8354) (or 2.31) times the 
+# odds of group PARCOLL=0 of the outcome
+# We fail to reject the null hypothesis (H0: β5=0), the estimated coefficient is not 
+# statistically different from 0, COLLEGE and FEMALE have no statistically significant relationship
+# Holding other variables constant, the group BLACK=1 has e^(1.0733) (or 2.92) times the 
+# odds of group BLACK=0 of the outcome
+
+# Question 3.1(d)
+
+m3_2 = smf.probit("COLLEGE ~ GRADES + FAMINC + FAMSIZ + PARCOLL + FEMALE + BLACK", data=df3_1).fit()
+m3_2.summary()
+
+# No, there is no change in the sign or significance of the coefficients between the logit and probit models.
+
+# Question 3.1(e)
+np.mean(df3_1['FAMINC'])
+# 51.3935
+[2.6937 - (0.2946*5) + (0.0054*51.39) - (0.0531*5) + (0.4765*1) + (0.0238*1) + (0.6109*1)]
+# 2.3439
+def normsdist(z):
+    z = si.norm.cdf(z,0.0,1.0)
+    return (z)
+normsdist(2.3439)
+# P = 0.9904 (99.04%)
+
+[2.6937 - (0.2946*10) + (0.0054*51.39) - (0.0531*5) + (0.4765*1) + (0.0238*1) + (0.6109*1)]
+# 0.8709
+normsdist(0.8709)
+# P = 0.8081 (80.81%)
+
+# Question 3.1(f)  
+
+# White female with GRADES = 5
+[2.6937 - (0.2946*5) + (0.00540*51.39) - (0.0531*5) + (0.4765*1) + (0.0238*1) + (0.6109*0)]
+# 1.7330
+normsdist(1.7330)
+# P = 0.9584 (95.84%)
+
+# White female with GRADES = 10
+[2.6937 - (0.2946*10) + (0.00540*51.39) - (0.0531*5) + (0.4765*1) + (0.0238*1) + (0.6109*0)]
+# 0.2600
+normsdist(0.2600)
+# P = 0.6026 (60.26%)
+
+# White male with GRADES = 5
+[2.6937 - (0.2946 *5) + (0.00540*51.39) - (0.0531*5) + (0.4765*1) + (0.0238*0) + (0.6109*0)]
+# 1.7092
+normsdist(1.7092)
+# 0.9563 (95.63%)
+
+# White male with GRADES = 10
+[2.6937 - (0.2946*10) + (0.00540*51.39) - (0.0531*5) + (0.4765*1) + (0.0238*0) + (0.6109*0)]
+# 0.2362
+normsdist(0.2362)
+# P = 0.5937 (59.37%)
+
+# Question 3.1(g)  
+
+m3_3 = smf.probit("COLLEGE ~ GRADES + FAMINC + FAMSIZ", data=df3_1).fit()
+m3_3.summary()
+# The signs and significance does not change (though, FAMSIZ does get closer to 0.05 significance)
