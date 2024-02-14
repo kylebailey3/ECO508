@@ -1,0 +1,94 @@
+# -*- coding: utf-8 -*-
+"""
+Created on Sat Feb 10 22:46:36 2024
+
+@author: elgin
+"""
+import pandas as pd
+import os
+from statsmodels.formula.api import ols
+import statsmodels.api as sm 
+from statsmodels.sandbox.regression.gmm import IV2SLS
+pd.options.display.max_columns = None
+import numpy as np
+import statsmodels.formula.api as smf
+import scipy.stats as si
+from scipy.stats import pearsonr
+
+
+#ECO 508 HW3 Kyle Bailey & Danielle Bauer
+os.chdir('/Users/elgin/OneDrive/Desktop/Python/Data')
+
+
+# Question 4.1(i)
+
+df4_1 = pd.read_csv('FERTIL2.csv')
+df4_1.head()
+df4_1.isnull().sum()
+df4_1 = df4_1.dropna(subset=['electric'])
+df4_1 = df4_1.dropna(subset=['tv'])
+df4_1 = df4_1.dropna(subset=['bicycle'])
+df4_1.isnull().sum()
+
+
+m4_1 = ols('children ~ educ + age + agesq', data=df4_1).fit()
+m4_1.summary()
+# Holding all other variables constant, one more year of education is expected to 
+# result in a decrease of 0.0904 children
+# Holding all other variables constant, if 100 women have one more year of education,
+# then of those 100 women, they are expected to have 9.04 less children (0.0904 less each)
+
+# Question 4.1(ii)
+
+m4_2 = ols('educ ~ age + agesq + frsthalf', data=df4_1).fit() 
+m4_2.summary()
+
+# Because frsthalf is statistically significant at the 0.01 significance level,
+# we can reject the null hypothesis that H0: β3=0 (or that π3=0), satisfying the condition
+# that in a regression of the endogenous explanatory variable on all exogenous variables,
+# the instrumental variable must have a non-zero coefficient
+
+# Question 4.1(iii)
+
+dep = df4_1['children']
+indep = df4_1[['educ', 'age', 'agesq']]
+instr = df4_1[['frsthalf', 'age', 'agesq']]
+indep_c = sm.add_constant(indep)
+instr_c = sm.add_constant(instr)
+m4_3 = IV2SLS(dep, indep_c, instr_c).fit()
+m4_3.summary()
+# The estimated effect decreases (becomes more negative) from -0.0904 in OLS to -0.1717 in IV2SLS
+# (the coefficient decreases, but the negative effect increases) and the estimate also
+# becomes much less percise.
+
+# Question 4.1(iv)
+
+m4_4 = ols('children ~ educ + age + agesq + electric + tv + bicycle', data=df4_1).fit()
+m4_4.summary()
+# After adding electric, tv, and bicycle, the coefficient for educ is increased to -0.0767 (less negative, but
+# negative effect is smaller) compared to educ's coefficient in the orignal OLS without these variables
+
+m4_5 = ols('educ ~ age + agesq + electric + tv + bicycle + frsthalf', data=df4_1).fit() 
+m4_5.summary()
+# After adding the additional variables, frsthalf is still a reasonable IV for educ
+
+dep = df4_1['children']
+indep = df4_1[['educ', 'age', 'agesq', 'electric', 'tv', 'bicycle']]
+instr = df4_1[['frsthalf', 'age', 'agesq', 'electric', 'tv', 'bicycle']]
+indep_c = sm.add_constant(indep)
+instr_c = sm.add_constant(instr)
+m4_6 = IV2SLS(dep, indep_c, instr_c).fit()
+m4_6.summary()
+# After adding the additional variables, the coefficient is decreased to -0.1640 (more negative)
+# compared to the original IV2SLS without these new variables
+
+# The IV2SLS made the negative effect greater than the OLS, but is also less precise
+
+# In the OLS model, holding all other variables constant, if a woman has a TV, then we expect
+# her number of children to decrease by -0.2531
+# The estimated coefficient for TV is not statistically significant in the IV2SLS model. There is no 
+# statistical relationship (if it were, then holding all other variables constant, if a woman has a
+# TV, then we'd expect her number of children to decrease by -0.0026)
+
+# Time watching TV may compete with time spent procreating, also exposure to urban/western media
+# may also change lifestyles of values of these women
