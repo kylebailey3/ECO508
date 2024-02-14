@@ -1,0 +1,320 @@
+import pandas as pd
+import os
+import numpy as np
+import statsmodels.formula.api as smf
+import scipy.stats as si
+from statsmodels.formula.api import ols
+import statsmodels.api as sm 
+from statsmodels.sandbox.regression.gmm import IV2SLS
+pd.options.display.max_columns = None
+
+os.chdir('/Users/Kyle/Desktop/Python/Data')
+
+df3_1 = pd.read_excel('nels_small.xlsx')
+df3_1.head()
+df3_1.isnull().sum()
+
+# Question 3.1(a)
+
+condition = (df3_1['PSECHOICE']==2) | (df3_1['PSECHOICE']==3)
+df3_1['COLLEGE']=0 
+df3_1.loc[condition, 'COLLEGE'] = 1
+
+percent = (np.sum(df3_1['COLLEGE']==1) / 1000)
+print(percent)
+# 77.8% of all high school graduates attended either a 2-yr or 4-yr college
+
+# Question 3.1(b)
+
+m3_1 = smf.logit("COLLEGE ~ GRADES + FAMINC + FAMSIZ + PARCOLL + FEMALE + BLACK", data=df3_1).fit()
+m3_1.summary()
+# Yes, all of the signs of the coefficients are as expected. Since in GRADES, 1 represents the highest grade and
+# 13 is the lowest grade, we expect that it'll be negatively related to going to college. Students
+# from wealthier families are more likely to attend college, so as income increases, so should the
+# the likelihood they attended college, therefore, FAMINC should be positive. Resources ares spread more thinly
+# the more children a family has, so FAMSIZ should be negatively related to college attendence. 
+# Also, parents' education level is highly correlated with children's education level, so we expected
+# PARCOLL to be positive. We don't have any solid expectations about BLACK or FEMALE, except that
+# females usually tend to be more educated than males, which is consistent with the variable's coefficient sign.
+
+# No, not all of the coefficients are statistically significant at the 0.05 significance level. 
+# Specifically, FAMSIZ and FEMALE are not.
+
+# Question 3.1(c)
+
+# Holding other variables constant, one unit increase in GRADES is associated with the odds
+# of the outcome being multiplied by e^(-0.5174) units (or by 0.6)
+# Holding other variables constant, one unit increase in FAMINC is associated with the odds
+# of the outcome being multiplied by e^(0.0130) units (or by 1.01)
+# We fail to reject the null hypothesis (H0: β3=0), the estimated coefficient is not 
+# statistically different from 0, COLLEGE and FAMSIZ have no statistically significant relationship.
+# Holding other variables constant, the group PARCOLL=1 has e^(0.8354) (or 2.31) times the 
+# odds of group PARCOLL=0 of the outcome
+# We fail to reject the null hypothesis (H0: β5=0), the estimated coefficient is not 
+# statistically different from 0, COLLEGE and FEMALE have no statistically significant relationship
+# Holding other variables constant, the group BLACK=1 has e^(1.0733) (or 2.92) times the 
+# odds of group BLACK=0 of the outcome
+
+# Question 3.1(d)
+
+m3_2 = smf.probit("COLLEGE ~ GRADES + FAMINC + FAMSIZ + PARCOLL + FEMALE + BLACK", data=df3_1).fit()
+m3_2.summary()
+
+# No, there is no change in the sign or significance of the coefficients between the logit and probit models.
+
+# Question 3.1(e)
+np.mean(df3_1['FAMINC'])
+# 51.3935
+[2.6937 - (0.2946*5) + (0.0054*51.39) - (0.0531*5) + (0.4765*1) + (0.0238*1) + (0.6109*1)]
+# 2.3439
+def normsdist(z):
+    z = si.norm.cdf(z,0.0,1.0)
+    return (z)
+normsdist(2.3439)
+# P = 0.9904 (99.04%)
+
+[2.6937 - (0.2946*10) + (0.0054*51.39) - (0.0531*5) + (0.4765*1) + (0.0238*1) + (0.6109*1)]
+# 0.8709
+normsdist(0.8709)
+# P = 0.8081 (80.81%)
+
+# Question 3.1(f)  
+
+# White female with GRADES = 5
+[2.6937 - (0.2946*5) + (0.00540*51.39) - (0.0531*5) + (0.4765*1) + (0.0238*1) + (0.6109*0)]
+# 1.7330
+normsdist(1.7330)
+# P = 0.9584 (95.84%)
+
+# White female with GRADES = 10
+[2.6937 - (0.2946*10) + (0.00540*51.39) - (0.0531*5) + (0.4765*1) + (0.0238*1) + (0.6109*0)]
+# 0.2600
+normsdist(0.2600)
+# P = 0.6026 (60.26%)
+
+# White male with GRADES = 5
+[2.6937 - (0.2946 *5) + (0.00540*51.39) - (0.0531*5) + (0.4765*1) + (0.0238*0) + (0.6109*0)]
+# 1.7092
+normsdist(1.7092)
+# 0.9563 (95.63%)
+
+# White male with GRADES = 10
+[2.6937 - (0.2946*10) + (0.00540*51.39) - (0.0531*5) + (0.4765*1) + (0.0238*0) + (0.6109*0)]
+# 0.2362
+normsdist(0.2362)
+# P = 0.5937 (59.37%)
+
+# Question 3.1(g)  
+
+m3_3 = smf.probit("COLLEGE ~ GRADES + FAMINC + FAMSIZ", data=df3_1).fit()
+m3_3.summary()
+# The signs and significance does not change (though, FAMSIZ does get closer to 0.05 significance)
+
+# Question 2(a)
+
+os.chdir('/Users/Kyle/Desktop/Python/Data')
+
+df2 = pd.read_excel('nels_small.xlsx')
+df2.head()
+df2.isnull().sum()
+
+condition = (df2['PSECHOICE']==2) | (df2['PSECHOICE']==3)
+df2['COLLEGE']=0 
+df2.loc[condition, 'COLLEGE'] = 1
+
+condition2 = (df2['PSECHOICE'] == 3)
+df2['FOURYR']=0
+df2.loc[condition2, 'FOURYR'] = 1
+
+df2_college = df2.query('COLLEGE == 1')
+
+fouryearpercent = (np.sum(df2['FOURYR']==1) / np.sum(df2['COLLEGE']==1))
+print(fouryearpercent)
+# 67.74% of students that attended college attended a four year school.
+
+femalepercent = (np.sum(df2_college['FEMALE']==1) / np.sum(df2_college['COLLEGE']==1))
+print(femalepercent)
+# 51.67% of female students attended a four year college.
+
+blackpercent = (np.sum(df2_college['BLACK']==1) / np.sum(df2_college['COLLEGE']==1))
+print(blackpercent)
+# 5.66% of students choosing a four year school are black.
+
+# Question 2(b)
+
+m2_1 = smf.logit("FOURYR ~ GRADES + FAMINC + FAMSIZ", data=df2_college).fit()
+m2_1.summary()
+# FOURYR = 2.6482 - 0.3807GRADES + 0.0088FAMINC + 0.0124FAMSIZ
+# The sign on GRADES makes sense as the ranking is 1(highest) and 13(lowest) so we expect those with
+# higher grades to be more likely to get accepted to a four year school.
+# The sign on FAMINC makes sense as students with wealthier families are more likely to 
+# be able to afford to attend a four year school.
+# Students from smaller families should have more resources to send their children to a 
+# four year school so I expected that to be negative.
+
+# Question 2(c)
+# b1: The coefficient on GRADES states that for a one unit increase (or one unit worse grade)
+# the odds of attending a four year college are multiplied by e^-0.3807
+# b2: The coefficient on FAMINC states that for a one unit increase in family income ($1000s)
+# the odds of attneding a four year college are multiplied by e^0.0088
+# b3: The coefficient on FAMSIZ states that for each additional family member, the odds
+# of attending a four year college are multiplied by e^0.0124, however, this variable is not
+# statistically significant so we find no relationship between FOURYR & FAMSIZ
+
+# Question 2(d)
+
+m2_2 = smf.probit("FOURYR ~ GRADES + FAMINC + FAMSIZ", data=df2_college).fit()
+m2_2.summary()
+# FOURYR = 1.5816 - 0.2280GRADES + 0.0053FAMINC + 0.0092FAMSIZ
+# There is no change in the sign or overall significance of the model moving from
+# logit to probit. The signs on the coefficients are identical with no changes in 
+# significance.
+
+# Question 2(e)
+
+df2_black = df2_college.query('BLACK == 1')
+m2_3 = smf.probit("FOURYR ~ GRADES + FAMINC + FAMSIZ", data=df2_black).fit()
+m2_3.summary()
+# FOURYR = 6.5376 - 0.8361GRADES + 0.0208FAMINC + 0.0834FAMSIZ
+df2_white = df2_college.query('BLACK == 0')
+m2_4 = smf.probit("FOURYR ~ GRADES + FAMINC + FAMSIZ", data=df2_white).fit()
+m2_4.summary()
+# FOURYR = 1.5128 - 0.2307GRADES + 0.0054FAMINC + 0.0195FAMSIZ
+# There are significant differences in the two probit models. First, the effect on changes in 
+# both GRADES and FAMINC are greater for black students than white students in determining the
+# probability of attending a four year school.
+# FAMINC is also insignificant in the model for black students.
+
+# Question 4.1(i)
+
+df4_1 = pd.read_csv('FERTIL2.csv')
+df4_1.head()
+df4_1.isnull().sum()
+df4_1 = df4_1.dropna(subset=['electric'])
+df4_1 = df4_1.dropna(subset=['tv'])
+df4_1 = df4_1.dropna(subset=['bicycle'])
+df4_1.isnull().sum()
+
+
+m4_1 = ols('children ~ educ + age + agesq', data=df4_1).fit()
+m4_1.summary()
+# Holding all other variables constant, one more year of education is expected to 
+# result in a decrease of 0.0904 children
+# Holding all other variables constant, if 100 women have one more year of education,
+# then of those 100 women, they are expected to have 9.04 less children (0.0904 less each)
+
+# Question 4.1(ii)
+
+m4_2 = ols('educ ~ age + agesq + frsthalf', data=df4_1).fit() 
+m4_2.summary()
+
+# Because frsthalf is statistically significant at the 0.01 significance level,
+# we can reject the null hypothesis that H0: β3=0 (or that π3=0), satisfying the condition
+# that in a regression of the endogenous explanatory variable on all exogenous variables,
+# the instrumental variable must have a non-zero coefficient
+
+# Question 4.1(iii)
+
+dep = df4_1['children']
+indep = df4_1[['educ', 'age', 'agesq']]
+instr = df4_1['frsthalf']
+indep_c = sm.add_constant(indep)
+instr_c = sm.add_constant(instr)
+m4_3 = IV2SLS(dep, indep_c, instr_c).fit()
+m4_3.summary()
+# The estimated effect increases (becomes less negative) from -0.0906 in OLS to -0.0350 in IV2SLS
+# (the coefficient increases, but the negative effect decreases) and the estimate also
+# becomes much less percise.
+
+# Question 4.1(iv)
+
+m4_4 = ols('children ~ educ + age + agesq + electric + tv + bicycle', data=df4_1).fit()
+m4_4.summary()
+# After adding electric, tv, and bicycle, the coefficient for educ is increased to -0.0767 (less negative, but
+# negative effect is smaller) compared to educ's coefficient in the orignal OLS without these variables
+
+m4_5 = ols('educ ~ age + agesq + electric + tv + bicycle + frsthalf', data=df4_1).fit() 
+m4_5.summary()
+# After adding the additional variables, frsthalf is still a reasonable IV for educ
+
+dep = df4_1['children']
+indep = df4_1[['educ', 'age', 'agesq', 'electric', 'tv', 'bicycle']]
+instr = df4_1['frsthalf']
+indep_c = sm.add_constant(indep)
+instr_c = sm.add_constant(instr)
+m4_6 = IV2SLS(dep, indep_c, instr_c).fit()
+m4_6.summary()
+# After adding the additional variables, the coefficient is decreased to -0.0884 (more negative)
+# compared to the original IV2SLS without these new variables
+
+# This time, the IV2SLS made the negative effect greater than the OLS, but is also less precise
+
+# In the OLS model, holding all other variables constant, if a woman has a TV, then we expect
+# her number of children to decrease by -0.2531
+# In the IV2SLS model, hold all other variables constant, if a woman has a TV, then we expect
+# her number of children to decrease by -13.1044
+
+# Time watching TV may compete with time spent procreating, also exposure to urban/western media
+# may also change lifestyles of values of these women
+
+# Question 4(i)
+
+df42 = pd.read_csv('CATHOLIC.csv')
+df42.head()
+df42.isnull().sum()
+
+count = len(df42)
+print(count)
+# There are 7430 students in the sample
+catholicpercent = (np.sum(df42['cathhs']==1) / 7430)
+print(catholicpercent)
+# 6.08% of students attend a catholic high school
+
+# Question 4(ii)
+
+m42_1 = ols('math12 ~ cathhs + lfaminc + motheduc + fatheduc', data=df42).fit()
+m42_1.summary()
+# math12 = 11.1486 + 1.4772cathhs + 1.8487lfaminc + 0.7163motheduc + 0.8913fatheduc
+# The estimate of b1 is 1.4772, meaning that students who attended catholic high schools
+# have, all else held equal, 1.4772 unit higher standardized math scores
+# The 95% CI is [0.658:2.297]
+
+# Question 4(iii)
+
+m42_2 = ols('cathhs ~ parcath', data=df42).fit()
+m42_2.summary()
+# cathhs = 0.0117 + 0.1420parcath
+# The t statistic for parcath is 25.383, indicating that there is low risk of a weak instrumental
+# variable, meaning that the instrument parcath is strongly correlateed with the endogenous var
+# cathhs.
+
+# Question 4(iv)
+
+dep = df42['math12']
+indep = df42[['cathhs', 'lfaminc', 'motheduc', 'fatheduc']]
+instr = df42[['parcath', 'lfaminc', 'motheduc', 'fatheduc']]
+indep_c = sm.add_constant(indep)
+instr_c = sm.add_constant(instr)
+m42_3 = IV2SLS(dep, indep_c, instr_c).fit()
+m42_3.summary()
+# math12 = 11.9147 + 4.1174cathhs + 1.7845lfaminc + 0.7133motheduc + 0.8759fatheduc
+# The coefficient on cathhs increasesd from 1.4772 to 4.1174
+# The 95% CI is [1.243:6.991]
+# Overall the effect of cathhs is greater when using parcath as an IV (catholic parents
+# could be more likely to send their children to catholic school), however, the estimate
+# is much less precise as seen by the far higher CI
+
+# Question 4(v)
+
+m42_4 = ols('cathhs ~ parcath + lfaminc + motheduc + fatheduc', data=df42).fit()
+m42_4.summary()
+
+df42['uhat'] = m42_4.resid
+m42_5 = ols('math12 ~ cathhs + lfaminc + motheduc + fatheduc + uhat', data=df42).fit()
+m42_5.summary()
+# The p value for uhat is 0.06, so at the 5% significance level we fail to reject the null 
+# hypothesis that cathhs is exogenous.
+
+#If the coefficient on uhat is statistically different from 0, then educ is endogenous  
+# the coefficient on uhat is not statistically different from 0, fail to reject null hypothesis
+# at the 5% significance level. Because uhat is insignificant so educ is exogenous
