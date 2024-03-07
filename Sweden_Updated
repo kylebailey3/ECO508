@@ -1,0 +1,357 @@
+# -*- coding: utf-8 -*-
+"""
+Created on Tue Feb 27 20:48:59 2024
+
+@author: elgin
+"""
+
+
+
+
+import numpy as np
+import pandas as pd
+import os
+from statsmodels.formula.api import ols
+from statsmodels.tsa.stattools import adfuller
+from statsmodels.graphics.tsaplots import plot_acf
+from statsmodels.graphics.tsaplots import plot_pacf
+from statsmodels.tsa.arima.model import ARIMA
+from sklearn.metrics import mean_squared_error
+from statsmodels.tsa.stattools import grangercausalitytests
+pd.options.display.max_columns = None
+
+
+os.chdir('/Users/elgin/OneDrive/Desktop/Python/Data')
+
+#Here I present two examples: Example 1: Sweden; Example 2: Syria
+
+
+
+
+
+
+
+
+
+#######################################################SWEDEN############################################
+Sweden = pd.read_excel('Pop_Life.xlsx',sheet_name='Sweden')
+
+#Get to know your data
+Sweden.head()
+Sweden.tail()
+Sweden.shape
+list(Sweden)
+
+#Checking whether we have any missing data
+Sweden.isnull().sum()
+
+
+#Ploting 
+Sweden['pop'].plot()
+Sweden['life'].plot()
+
+
+#Create log of population. (Natural log. we just call it log)
+Sweden['lpop'] = np.log(Sweden['pop'])
+Sweden['lpop'].plot()
+
+
+
+
+#Question 1
+#ADF Test for lpop
+result = adfuller(Sweden['lpop'])
+print('p-value: %f' % result[1])
+#Since p-value > 0.05, we fail to reject H0. We conclude time series is nonstationary
+
+
+#ADF Test for life
+result = adfuller(Sweden['life'])
+print('p-value: %f' % result[1])
+#Since p-value > 0.05, we fail to reject H0. We conclude time series is nonstationary
+
+
+#Run the * regression:
+m1 = ols('lpop ~ life', data=Sweden).fit() 
+m1.summary()
+
+
+#Interpret the parameter estimate for life:
+#A one-year increase in life expectance is associated with 2.59% increase in US population. 
+
+
+#Collect Residuals
+Sweden['e_hat']= m1.resid
+
+#Check if we did everything fine:
+Sweden.head()
+
+#plot residuals:
+Sweden['e_hat'].plot()
+
+
+#check for cointegration. That means we check whether residuals are stationary:
+result = adfuller(Sweden['e_hat'])
+print('p-value: %f' % result[1])
+#Since p-value > 0.05, we fail to reject H0. We conclude time series is nonstationary
+#That means we do not have cointegration. 
+#This means the result we got on m1 regression is spurious (it's merely correlation, not caSwedention)
+
+
+
+#Let's create their first diff and check if their first diff are stationary:
+Sweden['Dlife'] = Sweden['life'].diff().shift(-1)
+
+Sweden['Dlpop'] = Sweden['lpop'].diff().shift(-1)
+
+#Check if we did everything fine:
+Sweden.head()
+
+#Ploting Delta log(Population)
+Sweden['Dlpop'].plot()
+
+#Ploting Delta life
+Sweden['Dlife'].plot()
+
+
+
+#ADF Test for life
+result = adfuller(Sweden['Dlife'].dropna())
+print('p-value: %f' % result[1])
+#Since p-value < 0.05, we reject H0. We conclude time series is stationary
+
+#ADF Test for lpop
+result = adfuller(Sweden['Dlpop'].dropna())
+print('p-value: %f' % result[1])
+#Since p-value > 0.05, we cannot reject H0. We conclude time series is still non-stationary
+
+
+
+#Run the * regression:
+m2 = ols('Dlpop ~ Dlife', data=Sweden).fit() 
+m2.summary()
+#T-stat = -0.001, P-value = 0.999
+
+
+#Collect Residuals
+Sweden['e_hat2']= m2.resid
+
+#Check if we did everything fine:
+Sweden.head()
+
+#plot residuals:
+Sweden['e_hat2'].plot()
+
+
+#check for cointegration. That means we check whether residuals are stationary:
+result = adfuller(Sweden['e_hat2'].dropna())
+print('p-value: %f' % result[1])
+#Since p-value > 0.05, we fail to reject H0. We conclude time series is nonstationary
+#That means we do not have cointegration. 
+#This means the result we got on m1 regression is spurious (it's merely correlation, not caSwedention)
+
+
+
+
+
+#Second Difference
+
+Sweden['DDlpop'] = Sweden['Dlpop'].diff().shift(-1)
+Sweden.head()
+Sweden['DDlpop'].plot()
+
+
+result = adfuller(Sweden['DDlpop'].dropna())
+print('p-value: %f' % result[1])
+#Since p-value < 0.05, we reject H0. We conclude time series is stationary
+
+#Run the ** regression:
+m3 = ols('DDlpop ~ Dlife', data=Sweden).fit()
+m3.summary()
+#P-Value = 0.214
+
+
+
+
+
+
+
+
+
+#Question 2
+#The Granger Causality test is used to determine whether or not one time series is useful for forecasting another
+#This test uses the following null and alternative hypotheses:
+
+#Null Hypothesis (H0): Time series x does not Granger-cause time series y
+#Alternative Hypothesis (HA): Time series x Granger-causes time series y
+
+#The term “Granger-causes” means that knowing the value of time series x at a certain lag is 
+#useful for predicting the value of time series y at a later time period.
+
+#This test produces an F test statistic with a corresponding p-value. 
+#If the p-value is less than a certain significance level (i.e. α = .05), 
+#then we can reject the null hypothesis and conclude that we have sufficient evidence
+#to say that time series x Granger-causes time series y.
+
+#We can use the grangercausalitytests() function from the statsmodels package
+#to perform a Granger-Causality test in Python:
+
+#perform Granger-Causality test syntax in Python:
+#grangercausalitytests(df[['column1', 'column2']], maxlag=[3])
+#If p-value<0.05 we conclude: column 2 Granger-causes column 1
+#Note that maxlag indicates the number of lags to use in the first time series.
+
+#In order to run a Granger Causality test, the time series' you are using must be stationary.
+
+
+#Test 
+#perform Granger-Causality test
+grangercausalitytests(Sweden[['DDlpop', 'Dlife']].dropna(), maxlag=[2])
+#We conclude Dlife does not Granger-causes DDlpop
+
+grangercausalitytests(Sweden[['Dlife', 'DDlpop']].dropna(), maxlag=[2])
+#We conclude DDlpop does not Granger-causes Dlife
+
+
+
+
+
+
+
+
+
+
+#############################Question 3: ARIMA
+#Let's do predictions for lpop
+#d=2
+
+#Let's choose p
+plot_pacf(Sweden['DDlpop'].dropna())
+#P=2
+
+#Let's choose q
+plot_acf(Sweden['DDlpop'].dropna())
+#q=1
+
+Sweden_train = Sweden.iloc[:50]
+Sweden_test = Sweden.iloc[50:]
+
+Sweden_train.head()
+
+rmse_rate = []
+d=2
+
+# Might take some time
+for i in range(0,9):
+    for j in range (0,9):
+        model = ARIMA(Sweden_train['lpop'], order = (i,d,j)).fit()
+        Sweden_test['forecast'] = model.predict(start=50,end=60 ,dynamic=True)
+        mse = mean_squared_error(Sweden_test['lpop'] , Sweden_test['forecast'])
+        rmse = mse**0.5
+        rmse_rate.append(rmse)
+        
+
+rmse_rate
+
+x = pd.Series(rmse_rate).idxmin()
+
+
+q = x%10
+q
+#q=1
+p = (x-q)/10
+p
+#p=3
+
+
+
+#We will use p=3, d=2, q=1
+
+
+
+#Let's use ARIMA
+model = ARIMA(Sweden_train['lpop'], order = (3,2,1)).fit()
+model.summary()
+
+Sweden_test['forecast'] = model.predict(start=50,end=60 ,dynamic=True)
+Sweden_test[['lpop','forecast']].plot(figsize=(10,6))
+
+Sweden_test.head()
+
+mse = mean_squared_error(Sweden_test['lpop'] , Sweden_test['forecast'])
+rmse = mse**0.5
+rmse
+#0.0051
+
+#value of  Sweden_test['lpop'] for last observation:
+
+rmse / Sweden_test['lpop'].iloc[-1]
+#0.0003
+
+
+
+
+
+
+#Let's do predictions for life
+#d=1
+
+#Let's choose p
+plot_pacf(Sweden['Dlife'].dropna())
+#P=1
+
+#Let's choose q
+plot_acf(Sweden['Dlife'].dropna())
+#q=1
+
+
+rmse_rate = []
+d=1
+
+# Might take some time
+for i in range(0,9):
+    for j in range (0,9):
+        model = ARIMA(Sweden_train['life'], order = (i,d,j)).fit()
+        Sweden_test['forecast'] = model.predict(start=50,end=60 ,dynamic=True)
+        mse = mean_squared_error(Sweden_test['life'] , Sweden_test['forecast'])
+        rmse = mse**0.5
+        rmse_rate.append(rmse)
+        
+
+rmse_rate
+
+x = pd.Series(rmse_rate).idxmin()
+
+
+q = x%10
+q
+#q=6
+p = (x-q)/10
+p
+#p=3
+
+
+
+
+
+#We will use p=3, d=1, q=6
+
+
+#Let's use ARIMA
+model = ARIMA(Sweden_train['life'], order = (3,1,6)).fit()
+model.summary()
+
+Sweden_test['forecast2'] = model.predict(start=50,end=60 ,dynamic=True)
+Sweden_test[['life','forecast2']].plot(figsize=(10,6))
+
+
+mse2 = mean_squared_error(Sweden_test['life'] , Sweden_test['forecast2'])
+rmse2 = mse2**0.5
+rmse2
+#0.2372
+
+#rmse / value of  Sweden_test['life'] for last observation:
+
+rmse2 / Sweden_test['life'].iloc[-1]
+#0.0028
+
