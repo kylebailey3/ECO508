@@ -1,0 +1,212 @@
+# -*- coding: utf-8 -*-
+"""
+Created on Wed Mar 13 15:42:30 2024
+
+@author: Kyle
+"""
+
+import numpy as np
+import pandas as pd
+import matplotlib.pyplot as plt
+import os
+
+
+# For machine learning:
+from sklearn.model_selection import train_test_split
+from sklearn.linear_model import LinearRegression
+from sklearn import metrics
+from sklearn.linear_model import LogisticRegression
+from sklearn.metrics import classification_report
+from sklearn.metrics import confusion_matrix
+from sklearn.preprocessing import StandardScaler
+from sklearn.neighbors import KNeighborsClassifier
+from sklearn.neighbors import KNeighborsRegressor
+from sklearn.tree import DecisionTreeClassifier
+from sklearn.tree import DecisionTreeRegressor
+from sklearn.ensemble import RandomForestClassifier
+from sklearn.ensemble import RandomForestRegressor
+from sklearn.ensemble import GradientBoostingRegressor
+from sklearn.ensemble import GradientBoostingClassifier
+from sklearn import metrics
+from sklearn.metrics import accuracy_score
+pd.options.display.max_columns = None
+
+
+os.chdir('/Users/elgin/OneDrive/Desktop/Python/Data')
+
+# Machine Learning
+# On your anaconda command:
+# conda install scikit-learn  (or pip install scikit-learn)
+# Linear Regression
+
+# Set the directory
+
+# import your data
+
+att = pd.read_excel("attrition_question.xlsx")
+
+
+# Get to know your data
+att.head()
+att.describe()
+list(att)
+att.shape
+att.info()
+
+
+att['Attrition'].unique()
+att['BusinessTravel'].unique()
+att['Department'].unique()
+att['EducationField'].unique()
+att['Gender'].unique()
+att['JobRole'].unique()
+att['MaritalStatus'].unique()
+att['Over18'].unique()
+att['Over18'].value_counts()
+att['OverTime'].unique()
+
+
+cleanup = {'Attrition': {'No': 0, 'Yes': 1},
+           'BusinessTravel': {'Non-Travel': 0, 'Travel_Rarely': 1, 'Travel_Frequently': 2},
+           'Department': {'Sales': 1, 'Research & Development': 2, 'Human Resources': 3},
+           'EducationField': {'Other': 0, 'Life Sciences': 1, 'Marketing': 2, 'Human Resources': 3, 
+                              'Technical Degree': 4, 'Medical': 5},
+           'Gender': {'Female': 0, 'Male': 1},
+           'JobRole': {'Human Resources': 1, 'Sales Representative': 2, 'Sales Executive': 3, 'Manager': 4,
+                       'Healthcare Representative': 5, 'Laboratory Technician': 6, 'Manufacturing Director': 7,
+                       'Research Scientist': 8, 'Research Director': 9},
+           'MaritalStatus': {'Single': 0, 'Divorced': 1, 'Married': 2},
+           'Over18': {'Y': 1},
+           'OverTime': {'No': 0, 'Yes':1}
+           }
+
+
+att.replace(cleanup, inplace=True)
+att.head()
+att.dtypes
+
+
+df = att.iloc[:1200]
+df_new = att.iloc[1200:]
+
+
+X = df.drop('Attrition', axis=1)
+y = df['Attrition']
+
+X_train, X_test, y_train, y_test = train_test_split(
+    X, y, test_size=0.3)
+
+X_train.info()
+y_train.info()
+
+
+#Logistic Regression
+logmodel = LogisticRegression()
+logmodel.fit(X_train, y_train)
+
+log_pred = logmodel.predict(X_test)
+
+print('AUC:', metrics.roc_auc_score(y_test, log_pred))
+#Logistic AUC = 0.503
+
+#Decision tree
+dtc = DecisionTreeClassifier()
+dtc.fit(X_train, y_train)
+
+dtc_pred = dtc.predict(X_test)
+
+print('AUC:', metrics.roc_auc_score(y_test, dtc_pred))
+#Decision Tree AUC = 0.554
+
+#Random Forest
+rfc = RandomForestClassifier()
+rfc.fit(X_train, y_train)
+
+rfc_pred = rfc.predict(X_test)
+
+print('AUC:', metrics.roc_auc_score(y_test, rfc_pred))
+#Random Forest AUC = 0.563
+
+#Boosting
+gbc = GradientBoostingClassifier()
+gbc.fit(X_train, y_train)
+
+gbc_pred = gbc.predict(X_test)
+
+print('AUC:', metrics.roc_auc_score(y_test, gbc_pred))
+#Boosting AUC = 0.624
+
+#KNN
+knnc = KNeighborsClassifier(n_neighbors=5)
+knnc.fit(X_train, y_train)
+
+knnc_pred = knnc.predict(X_test) 
+
+print('AUC:', metrics.roc_auc_score(y_test, knnc_pred))
+#KNN1 AUC: 0.504
+
+#KNN2
+#Standardize the Variables: Time to standardize the variables, otherwise scale of variables impact KNN
+scaler = StandardScaler()
+scaler.fit(X)
+
+#Use the .transform() method to transform the features to a scaled version.
+scaled_features = scaler.transform(X)
+
+X_train2, X_test2, y_train2, y_test2 = train_test_split(scaled_features,y, test_size=0.20)
+
+knnc = KNeighborsClassifier(n_neighbors=5)
+
+knnc.fit(X_train2,y_train2)
+
+#Predictions and Evaluations: 
+knnc_pred = knnc.predict(X_test2)
+print('AUC:', metrics.roc_auc_score(y_test2, knnc_pred))
+#KNN2 AUC: 0.566
+
+#KNN3
+error_rate = []
+
+# Will take some time
+for i in range(1,30):
+    knnr = KNeighborsRegressor(n_neighbors=i)
+    knnr.fit(X_train2, y_train2)
+    pred_i = knnr.predict(X_test2)
+    error_rate.append(np.sqrt(metrics.mean_squared_error(y_test2, pred_i)))
+
+error_rate
+
+pd.Series(error_rate).idxmin()
+#Remember add one, because indexing starts from 0 in Python
+min(error_rate)
+
+#Extra:
+#Now create the following plot using the information from your for loop.
+plt.figure(figsize=(10,6))
+plt.plot(range(1,30),error_rate,color='blue', linestyle='dashed', marker='o', markerfacecolor='red', markersize=10)
+plt.title('Error Rate vs. K Value')
+plt.xlabel('K')
+plt.ylabel('Error Rate')
+
+#Let's do it again with the best k (k=23)
+
+knnc = KNeighborsClassifier(n_neighbors=23)
+knnc.fit(X_train2,y_train2)
+
+#Predictions and Evaluations: 
+knnc_pred = knnc.predict(X_test2)
+print('AUC:', metrics.roc_auc_score(y_test2, knnc_pred))
+# 0.50
+
+# Final predictions using Boosting
+X2 = df_new.drop('Attrition', axis=1)
+y2 = df_new['Attrition']
+
+gbc_pred_final = GradientBoostingClassifier()
+gbc_pred_final.fit(X_train,y_train)
+
+# Predicting on the last 270 unseen variables
+predictions = gbc.predict(X2)
+
+pred_df = pd.DataFrame(predictions, columns=["predictions"])
+pred_df.to_excel('Bailey_Bauer.xlsx', sheet_name='Data', index=False)
