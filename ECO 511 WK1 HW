@@ -1,0 +1,194 @@
+#ECO 511 HW WK1 Danielle Bauer
+
+#PART I
+
+v0 <- rep(0,5)
+v1 <- 1:5
+v1 <- seq(1,5,by=1)
+v1 <- c(1L,2L,3L,4L,5L)
+v2 <- c(1, 2.1, 3.5, 4, 50)
+v3 <- c("a", "b", "c","d","e")
+v4 <- c(TRUE, FALSE, TRUE, TRUE,FALSE)
+
+m1 <- matrix(1:9, nrow=3, ncol=3) 
+list1 <- list(v1,v2,v3,v4) 
+
+df <- data.frame(Name = c("Alice", "Bob", "Charlie"),
+                 Age = c(25, 32, 37),
+                 Married = c(TRUE, FALSE, TRUE))
+
+df<- read.csv("/var/www/html/jlee141/econdata/eco520/chicago_cca.csv")
+dat1 <- data.frame(v1,v2,v3,v4)                 
+
+dat1$cat1 <- ifelse(dat1$v2 > 20,1,0) 
+dat1$cat2 <- ifelse(dat1$v4 == TRUE,1,0)
+
+dat2 <- dat1[1:3,]                              
+dat3 <- dat1[,1:3]                               
+dat4 <- dat1[which(v4==TRUE),]                    
+dat5 <- subset(dat1,v4==TRUE)                    
+dat6 <- subset(dat1,v4==TRUE, select=c(v1,v2,squared,cat1:cat2)) 
+
+my_ts <- ts(data = c(1:24), start = 2001, end=2024, frequency = 1)
+my_ts <- ts(data = c(1:24), start = 2001, frequency = 4)
+my_ts <- ts(data = c(1:24), start = 2001, frequency = 12)
+my_ts <- ts(data = c(1:24), start = 2001, frequency = 52)
+data <- c(10,11,5,10,15,12,30,18,25,5,20,15)
+my_ts <- ts(data, start=c(2001,1), end=c(2003,4), frequency=4)
+ts(1:10, frequency = 4, start = c(1959, 2)) 
+print( ts(1:10, frequency = 7, start = c(12, 2)), calendar = TRUE)
+print(ts(1:48, frequency = 24, start = c(12, 6)), calendar = TRUE)
+
+dates <- as.Date("2020-01-01") + 0:9
+zoo_ts <- zoo(1:10, dates)
+
+library(xts)
+xts_ts <- xts(1:10, order.by=dates)
+library(lubridate)  
+
+ID <- 1:12
+NAME <- LETTERS[1:12]
+NUM <- rnorm(12)  
+date <- seq(as.Date("2020-01-01"),length=12, by="months")
+year <- year(date)
+month <- month(date)
+
+df <- data.frame(ID,date,year,month,NAME,NUM)  
+df_ts <- ts(df,start=c(2020,1), frequency = 12)
+ts_xts <- as.xts(df_ts)
+plot(ts_xts)
+plot(ts_xts$NUM)
+
+df_xts <- xts(df,order.by = date)
+xts_ts <- ts(df_xts,start=c(2020,1),frequency = 12)
+
+xts_df <- as.data.frame(df_xts)
+xts_df$date <- as.Date(xts_df$date)
+xts_df$year <- year(xts_df$date)
+xts_df$NUM <- as.numeric(xts_df$NUM)
+
+lag_NUM <- lag(NUM,1)
+
+for_NUM = lead(NUM,1)
+
+diff_NUM = diff(NUM,lag=1)
+
+pc_NUM = 100*(NUM - lag(NUM))/lag(NUM)
+
+#Google Trends
+library(gtrendsR)
+trends <- gtrends(c("OpenAI","ALTER"),geo=c("US","GB"), time="2020-01-01 2022-01-31")
+plot(trends)
+
+#Yahoo Finance Data
+library(quantmod)
+getSymbols("AAPL", src="yahoo", from="2020-01-01", to="2020-12-31")
+plot(Cl(AAPL)) #closed price
+plot(Ad(AAPL)) #adjusted price
+plot(Vo(AAPL)) #volume
+
+#Convert to Monthly Data
+vo_month <- apply.monthly(Vo(AAPL),sum)
+plot(vo_month)
+
+#FRED Data
+getSymbols("UNRATE", src="FRED")
+plot(UNRATE)
+
+plot.ts(UNRATE)
+chartSeries(AAPL)
+chartSeries(AAPL, theme=chartTheme('white'), subset="2020-11-01::2022-12-31")
+
+#Dynamic Graphs
+library(dygraphs)
+dygraph(OHLC(AAPL))
+
+
+
+
+
+#PART II
+
+library(dplyr)
+library(zoo)
+library(xts)
+library(gtrendsR)
+library(quantmod)
+library(ggplot2)
+
+getSymbols(c("AMZN","MSFT"), src = "yahoo",
+           from = "2020-01-01", to = "2024-12-31")
+
+#Question 1
+plot(AMZN)
+chartSeries(AMZN)
+
+plot(MSFT)
+chartSeries(MSFT)
+
+#Question 2
+amzn_wk <- apply.weekly((AMZN),sum)
+amzn_mo <- apply.monthly((AMZN),sum)
+amzn_qtr <- apply.quarterly((AMZN),sum)
+amzn_yr <- apply.yearly((AMZN),sum)
+
+plot(amzn_wk)
+chartSeries(amzn_wk)
+plot(amzn_mo)
+chartSeries(amzn_mo)
+plot(amzn_qtr)
+chartSeries(amzn_qtr)
+plot(amzn_yr)
+chartSeries(amzn_yr)
+
+msft_wk <- apply.weekly((MSFT),sum)
+msft_mo <- apply.monthly((MSFT),sum)
+msft_qtr <- apply.quarterly((MSFT),sum)
+msft_yr <- apply.yearly((MSFT),sum)
+
+plot(msft_wk)
+chartSeries(msft_wk)
+plot(msft_mo)
+chartSeries(msft_mo)
+plot(msft_qtr)
+chartSeries(msft_qtr)
+plot(msft_yr)
+chartSeries(msft_yr)
+
+#They're all decreasing over time
+
+#Question 3
+amzn_vo_mo <- apply.monthly(Vo(AMZN),sum)
+plot(amzn_vo_mo)
+chartSeries(amzn_vo_mo)
+
+msft_vo_mo <- apply.monthly(Vo(MSFT),sum)
+plot(msft_vo_mo)
+chartSeries(msft_vo_mo)
+
+#They're all decreasing, with less volaltility overtime
+
+
+
+#PART 3
+
+#Question 1
+getSymbols("CPILFESL", src = "FRED",
+           from = "2000-01-01", to = "2024-12-31")
+plot(CPILFESL)
+chartSeries(CPILFESL)
+
+#Question 2
+CPI_qtr <- apply.quarterly((CPILFESL),sum)
+CPI_yr  <- apply.yearly((CPILFESL),sum)
+
+plot(CPI_qtr)
+chartSeries(CPI_qtr)
+plot(CPI_yr)
+chartSeries(CPI_yr)
+
+#They're all increasing steadily until an extremely steep fall
+
+#Question 3
+library(dygraphs)
+dygraph((CPI_yr))
