@@ -1,0 +1,6 @@
+ssc install estout, replace
+quietly estpost summarize re74 re75 agesq nodegree married black hisp if train == 1
+est store Treated
+quietly estpost summarize re74 re75 agesq nodegree married black hisp if train == 0
+est store Control
+esttab Treated Control, cells("mean(fmt(2)) sd(fmt(2))") label noobs nonumber mtitle("Treated" "Control")
