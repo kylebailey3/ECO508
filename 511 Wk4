@@ -1,0 +1,147 @@
+# Part I.
+
+# 1. Data loading
+housing <- read.csv("https://bigblue.depaul.edu/jlee141/econdata/eco376_511/Chicago_HomeSales_2010_2023.csv")
+housing$DATE <- as.Date(housing$DATE, format = '%Y-%m-%d')
+```
+
+```{r}
+# 2. Monthly time series for number of houses sold
+monthly_sales <- housing %>%
+  mutate(month = floor_date(DATE, "month")) %>%
+  group_by(month) %>%
+  summarize(total_sales = n(), .groups = 'drop')
+
+# Set the index base to January 2012
+base_sales <- monthly_sales %>%
+  filter(month == as.Date("2012-01-01")) %>%
+  select(month, total_sales)
+
+# Rename for clarity
+colnames(base_sales) <- c("month", "base_sales")
+
+# Join base sales to monthly sales for index calculation
+monthly_sales <- monthly_sales %>%
+  left_join(base_sales, by = "month")
+
+# Replace any NA
+monthly_sales$base_sales[is.na(monthly_sales$base_sales)] <- 1708
+
+# Calculate indices with January 2012 as base 100
+monthly_sales <- monthly_sales %>%
+  mutate(index = (total_sales / base_sales) * 100)
+```
+
+```{r}
+# 3. Monthly median prices by city
+monthly_med_price_CHI <- housing %>%
+  filter(CHICAGO == 1) %>%
+  mutate(month = floor_date(DATE, "month")) %>%
+  group_by(month) %>%
+  summarize(median_price = median(PRICE), .groups = 'drop')
+
+monthly_med_price_OTHER <- housing %>%
+  filter(CHICAGO == 0) %>%
+  mutate(month = floor_date(DATE, "month")) %>%
+  group_by(month) %>%
+  summarize(median_price = median(PRICE), .groups = 'drop')
+
+# Set the index base to January 2015
+base_price_CHI <- monthly_med_price_CHI %>%
+  filter(month == as.Date("2015-01-01")) %>%
+  select(month, median_price)
+colnames(base_price_CHI) <- c("month", "base_price_CHI")
+
+base_price_OTHER <- monthly_med_price_OTHER %>%
+  filter(month == as.Date("2015-01-01")) %>%
+  select(month, median_price)
+colnames(base_price_OTHER) <- c("month", "base_price_OTHER")
+
+# Join for index
+monthly_med_price_CHI <- monthly_med_price_CHI %>%
+  left_join(base_price_CHI, by = "month")
+
+monthly_med_price_CHI$base_price_CHI[is.na(monthly_med_price_CHI$base_price_CHI)] <- 157000
+
+monthly_med_price_OTHER <- monthly_med_price_OTHER %>%
+  left_join(base_price_OTHER, by = "month")
+
+monthly_med_price_OTHER$base_price_OTHER[is.na(monthly_med_price_OTHER$base_price_OTHER)] <- 173000
+
+# Calculate indices with January 2015 as base 100
+monthly_med_price_CHI <- monthly_med_price_CHI %>%
+  mutate(index = (median_price / base_price_CHI) * 100)
+
+monthly_med_price_OTHER <- monthly_med_price_OTHER %>%
+  mutate(index = (median_price / base_price_OTHER) * 100)
+
+# Plot total sales by type with index values
+ggplot(monthly_med_price_CHI, aes(x=month, y=index)) +
+  geom_line() +
+  labs(title="Chicago Median Sale Price (Base: January 2015)", x="Month", y="Median Sales($)") +
+  theme_minimal() +
+  theme(legend.position = "bottom")
+
+ggplot(monthly_med_price_OTHER, aes(x=month, y=index)) +
+  geom_line() +
+  labs(title="Suburban Median Sale Price (Base: January 2015)", x="Month", y="Median Sales($)") +
+  theme_minimal() +
+  theme(legend.position = "bottom")
+
+# There are clear seasonal trends in the median home price by month.
+# Chicago experienced a large jump in home prices at the beginning of 2020 that the suburbs did not experience.
+```
+
+```{r}
+# 4. Decompose time series
+
+# convert to ts
+monthly_med_price_CHI <- monthly_med_price_CHI$index
+
+monthly_med_price_OTHER <- monthly_med_price_OTHER$index
+
+CHI_ts <- ts(monthly_med_price_CHI,frequency = 12,start=c(2010,1))
+OTHER_ts <- ts(monthly_med_price_OTHER,frequency = 12,start=c(2010,1))
+
+plot(decompose(CHI_ts))
+plot(decompose(OTHER_ts))
+
+# There are certainly seasonal trends as can be seen in the decomposed graphs
+# This is logical as there is a particular selling season toward the end of summer
+
+# Test stationarity
+unitroot_tests(CHI_ts)
+unitroot_tests(diff(CHI_ts, lag=1))
+unitroot_tests(diff(CHI_ts, lag=12))
+
+unitroot_tests(OTHER_ts)
+unitroot_tests(diff(OTHER_ts, lag=1))
+unitroot_tests(diff(OTHER_ts, lag=12))
+
+# The unit root tests reveal that the time series both are stationary according to the ADF and PP test but fail the KPSS test
+# A first difference passes the KPSS test and could be used for time series modeling
+
+# ACF & PACF graphs
+acf(CHI_ts)
+pacf(CHI_ts)
+
+acf(OTHER_ts)
+pacf(OTHER_ts)
+```
+
+```{r}
+# 5. ARIMA modeling and forecasting
+
+CHI_model <- arima(CHI_ts, order=c(2,1,1),
+                   seasonal=list(order=c(1,0,1), period=12))
+summary(CHI_model)
+
+OTHER_model <- arima(OTHER_ts, order=c(1,1,1),
+                   seasonal=list(order=c(0,0,1), period=12))
+summary(OTHER_model)
+
+forecast_CHI <- forecast(CHI_model, h=3)
+forecast_OTHER <- forecast(OTHER_model, h=3)
+
+accuracy(forecast_CHI, CHI_ts)
+accuracy(forecast_OTHER, OTHER_ts)
