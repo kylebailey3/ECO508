@@ -1,0 +1,67 @@
+capture log close
+cd "C:\Users\elgin\OneDrive\Desktop\Python\Code"
+log using "ECO 510 Assignment 4.txt", text replace
+clear
+set type double
+use "C:\Users\elgin\Downloads\wage2.dta"
+
+***1.A***
+reg lwage educ
+
+***1.B***
+gen sibs3plus = sibs > 2
+
+ssc install estout, replace
+quietly estpost summarize age exper married black south urban if sibs3plus == 1
+est store ThreePlusSibs
+quietly estpost summarize age exper married black south urban  if sibs3plus == 0
+est store TwoLessSibs
+esttab ThreePlusSibs TwoLessSibs, cells("mean(fmt(2)) sd(fmt(2))") label noobs nonumber mtitle("ThreePlusSibs" "TwoLessSibs")
+*The two groups are pretty well balanced, except that there are more than twice the amount of black people in the group with 2 siblings or less
+
+***1.C***
+reg educ sibs3plus
+scalar first_stage_coef = _b[sibs3plus]
+*sibs3plus is an adequate instrument, since it does have a statistically significant relationship with educ and the magnitude of the coefficient is somewhat significant (having 3 or more siblings reduces the years of expected education by almost a year). However, the explanatory power is somewhat low (R-squared = 0.0354).
+
+***1.D***
+reg lwage sibs3plus
+*When lwage is regressed on sibs3plus, the magnitude of the coefficient (in terms of absolute value) for sibs3plus is twice as large as educ when lwage is regressed on educ. However, when lwage is regressesd on sibs3plus, there is less explanatory power (much lower R-squared), however, it is still statistically significant. 
+
+***1.E***
+scalar reduced_form_coef = _b[sibs3plus]
+display "Ratio: " reduced_form_coef / first_stage_coef
+
+***1.F***
+ivreg lwage (educ = sibs3plus)
+
+
+***1.G***
+*Birth order would likely be negatively correlated with education, because first born children usually get first priority of parent's resources, since with more children, the less resources can be allocated to each child. In other words, a parent may be able to spend the money to send one child to college, but not multiple children.
+reg educ brthord
+*There is a statistically significant negative relationship between birth order and education.
+
+***1.H***
+ivreg lwage (educ = brthord)
+*Birth order is likely a better instrument, because its 2SLS IV regression is more statistically significant (the p-value of the F-test is lower) and it increased the coefficient for education.
+
+***1.I***
+ivreg lwage (educ = sibs3plus brthord)
+*Using both as an instrument improves the regression (has a higher F-stat) and incerases the coefficient for education to a level that better reflects the reality of the effect education level has on wages.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
