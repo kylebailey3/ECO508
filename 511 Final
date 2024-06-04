@@ -1,0 +1,79 @@
+library(dplyr)
+library(ggplot2)
+library(tidyverse)
+library(tsibble)
+library(fable)
+library(vars)
+library(lmtest)
+library(gridExtra)
+library(kableExtra)
+source("https://bigblue.depaul.edu/jlee141/econdata/R/func_tslib.R")
+
+
+data <- read.csv("C:/Users/elgin/Downloads/vaccinations.csv")
+usdata <- data %>% filter(iso_code == "USA")
+
+data_ts <- usdata %>%
+  mutate(date = as.Date(date, format = "%Y-%m-%d"))%>%
+  as_tsibble(index = date)
+
+summary(data_ts)
+
+summary <- summary(data_ts)
+kable(summary, caption = "Summary Statistics") %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed"), full_width = F)
+
+names <- print(names(data_ts))
+
+
+ggplot(data_ts, aes(x = date, y = daily_vaccinations)) +
+  geom_line() +
+  labs(title = "Daily Vaccinations Over Time in the U.S.",
+       x = "Date",
+       y = "Daily Vaccinations") +
+  theme_minimal()
+
+
+ggplot(data_ts, aes(x = date, y = daily_vaccinations)) +
+  geom_line(color = "white") +  # Set line color to white
+  labs(title = "Daily Vaccinations Over Time in the US",
+       x = "Date",
+       y = "Daily Vaccinations") +
+  theme_minimal(base_family = "Helvetica") +
+  theme(
+    panel.background = element_rect(fill = "black"),  # Background color
+    plot.background = element_rect(fill = "black"),   # Plot area background color
+    panel.grid.major = element_line(color = "black"),# Major grid lines color
+    panel.grid.minor = element_line(color = "black"),# Minor grid lines color
+    axis.text = element_text(color = "white"),        # Axis text color
+    axis.title = element_text(color = "white"),       # Axis titles color
+    plot.title = element_text(color = "white")        # Plot title color
+  )
+
+
+
+
+data_ts <- na.omit(data_ts)
+unitroot_tests(data_ts$daily_vaccinations)
+ddata <- diff(data_ts$daily_vaccinations)
+unitroot_tests(ddata)
+
+
+cases <- read.csv("C:/Users/elgin/Downloads/new_cases.csv")
+uscases <- cases[, c("United.States", "date")]
+tail(uscases$date)
+
+case_ts <- uscases %>%
+  mutate(date = as.Date(date, format = "%Y-%m-%d"))%>%
+  as_tsibble(index = date)
+
+summary(case_ts)
+na.omit(case_ts)
+
+head(data_ts$date)
+tail(data_ts$date)
+
+usvax <- ts(data_ts)
+usinf <- ts(case_ts)
+indata_ts <- na.omit(cbind(usvax,usinf), start=c(2021-02-04), end=c(2022-09-02),frequency = 12)
+
