@@ -1,0 +1,122 @@
+---
+title: "Final Project"
+author: "Kyle Bailey"
+date: "2024-06-04"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+library(dplyr)
+library(ggplot2)
+library(tidyverse)
+library(tsibble)
+library(fable)
+library(vars)
+library(lmtest)
+library(gridExtra)
+library(kableExtra)
+library(zoo)
+library(quantmod)
+library(PerformanceAnalytics)
+library(forecast)
+library(tseries)
+library(xts)
+library(lubridate)
+source("https://bigblue.depaul.edu/jlee141/econdata/R/func_tslib.R")
+```
+
+```{r}
+setwd("C:/Users/Kyle/Desktop/MS Econ & Quant Analysis/ECO 511/Final Project")
+data <- read.csv("vaccinations.csv")
+usdata <- data %>% filter(iso_code == "USA")
+
+usdata <- usdata[,c(3,9)]
+
+data_ts <- usdata %>%
+  mutate(date = as.Date(date, format = "%Y-%m-%d"))%>%
+  mutate(date = floor_date(date, unit = "week")) %>%
+  group_by(date) %>% 
+  summarize(weekly_vaccinations = sum(daily_vaccinations), .groups = 'drop') %>% 
+  as_tsibble(index = date)
+
+summary(data_ts)
+
+summary <- summary(data_ts)
+kable(summary, caption = "Summary Statistics") %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed"), full_width = F)
+
+names <- print(names(data_ts))
+```
+
+```{r}
+ggplot(data_ts, aes(x = date, y = weekly_vaccinations)) +
+  geom_line() +
+  labs(title = "Weekly Vaccinations Over Time in the U.S.",
+       x = "Date",
+       y = "Weekly Vaccinations") +
+  theme_minimal()
+
+
+ggplot(data_ts, aes(x = date, y = weekly_vaccinations)) +
+  geom_line(color = "white") +  # Set line color to white
+  labs(title = "Weekly Vaccinations Over Time in the US",
+       x = "Date",
+       y = "Weekly Vaccinations") +
+  theme_minimal(base_family = "Helvetica") +
+  theme(
+    panel.background = element_rect(fill = "black"),  # Background color
+    plot.background = element_rect(fill = "black"),   # Plot area background color
+    panel.grid.major = element_line(color = "black"),# Major grid lines color
+    panel.grid.minor = element_line(color = "black"),# Minor grid lines color
+    axis.text = element_text(color = "white"),        # Axis text color
+    axis.title = element_text(color = "white"),       # Axis titles color
+    plot.title = element_text(color = "white")        # Plot title color
+  )
+```
+
+```{r}
+data_ts <- na.omit(data_ts)
+unitroot_tests(data_ts$weekly_vaccinations)
+ddata <- diff(data_ts$weekly_vaccinations)
+unitroot_tests(ddata)
+
+cases <- read.csv("new_cases.csv")
+uscases <- cases[, c("United.States", "date")]
+tail(uscases$date)
+
+case_ts <- uscases %>%
+  mutate(date = as.Date(date, format = "%Y-%m-%d"))%>%
+  mutate(date = floor_date(date, unit = "week")) %>%
+  group_by(date) %>% 
+  summarize(weekly_cases = sum(United.States), .groups = 'drop') %>% 
+  as_tsibble(index = date)
+
+summary(case_ts)
+na.omit(case_ts)
+
+usvax <- xts(data_ts$weekly_vaccinations, order.by = data_ts$date)
+usinf <- xts(case_ts$weekly_cases, order.by = case_ts$date)
+
+indata_ts <- as.xts(cbind(usvax, usinf))
+indata_ts <- na.omit(indata_ts)
+colnames(indata_ts) <- c("weekly_vax", "weekly_cases")
+
+acf(indata_ts)
+pacf(indata_ts)
+
+indata_train <- window(indata_ts, end = "2022-11-13")
+indata_test <- window(indata_ts, start = "2022-11-20")
+
+model1 <- auto.arima(indata_train[,"weekly_vax"])
+summary(model1)
+forecast1 <- forecast(model1,h=12)
+accuracy(forecast1)
+
+lines <- ts(indata_test$weekly_vax, start=c(2022,11), frequency=52)
+
+# Plot the forecast against the actual test data
+plot(forecast1, main="Forecast vs Actual Test Data")
+lines(lines, col='red', lwd=2)
+legend("bottomleft", legend=c("Forecasts", "Actual Test Data"), col=c("blue", "red"), lty=1, lwd=2, cex=0.8)
+```
+
