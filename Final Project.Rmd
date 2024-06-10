@@ -16,40 +16,65 @@ library(lmtest)
 library(gridExtra)
 library(kableExtra)
 library(zoo)
+library(gtrendsR)
 library(quantmod)
 library(PerformanceAnalytics)
 library(forecast)
+library(randomForest)
 library(tseries)
 library(xts)
 library(lubridate)
 source("https://bigblue.depaul.edu/jlee141/econdata/R/func_tslib.R")
 ```
 
-```{r}
+```{r Data Cleaning}
 setwd("C:/Users/Kyle/Desktop/MS Econ & Quant Analysis/ECO 511/Final Project")
+
+# US vaccination data            
 data <- read.csv("vaccinations.csv")
 usdata <- data %>% filter(iso_code == "USA")
-
 usdata <- usdata[,c(3,9)]
 
-data_ts <- usdata %>%
+vax_ts <- usdata %>%
   mutate(date = as.Date(date, format = "%Y-%m-%d"))%>%
   mutate(date = floor_date(date, unit = "week")) %>%
   group_by(date) %>% 
   summarize(weekly_vaccinations = sum(daily_vaccinations), .groups = 'drop') %>% 
   as_tsibble(index = date)
 
-summary(data_ts)
+vax_ts <- vax_ts %>% 
+  mutate(ln_weekly_vaccinations = log(vax_ts$weekly_vaccinations)) 
 
-summary <- summary(data_ts)
-kable(summary, caption = "Summary Statistics") %>%
-  kable_styling(bootstrap_options = c("striped", "hover", "condensed"), full_width = F)
+# US case data
+cases <- read.csv("new_cases.csv")
+uscases <- cases[, c("United.States", "date")]
 
-names <- print(names(data_ts))
+case_ts <- uscases %>%
+  mutate(date = as.Date(date, format = "%Y-%m-%d"))%>%
+  mutate(date = floor_date(date, unit = "week")) %>%
+  group_by(date) %>% 
+  summarize(weekly_cases = sum(United.States), .groups = 'drop') %>%
+  mutate(ln_weekly_cases = log(weekly_cases)) %>% 
+  as_tsibble(index = date)
+
+summary(case_ts)
+na.omit(case_ts)
+
+# US Google trends data
+trends <- gtrends(c("vaccine"),geo=c("US"),time="2020-12-20 2022-05-08")
+trends <- xts(trends$interest_over_time$hits, order.by = trends$interest_over_time$date)
+
+# Merge data
+usvax <- xts(vax_ts$ln_weekly_vaccinations, order.by = vax_ts$date)
+usinf <- xts(case_ts$ln_weekly_cases, order.by = case_ts$date)
+
+indata_ts <- as.xts(cbind(usvax, usinf))
+indata_ts <- na.omit(indata_ts)
+colnames(indata_ts) <- c("ln_weekly_vax", "ln_weekly_cases")
 ```
 
-```{r}
-ggplot(data_ts, aes(x = date, y = weekly_vaccinations)) +
+```{r Plots}
+ggplot(vax_ts, aes(x = date, y = ln_weekly_vaccinations)) +
   geom_line() +
   labs(title = "Weekly Vaccinations Over Time in the U.S.",
        x = "Date",
@@ -57,7 +82,7 @@ ggplot(data_ts, aes(x = date, y = weekly_vaccinations)) +
   theme_minimal()
 
 
-ggplot(data_ts, aes(x = date, y = weekly_vaccinations)) +
+ggplot(vax_ts, aes(x = date, y = ln_weekly_vaccinations)) +
   geom_line(color = "white") +  # Set line color to white
   labs(title = "Weekly Vaccinations Over Time in the US",
        x = "Date",
@@ -74,49 +99,194 @@ ggplot(data_ts, aes(x = date, y = weekly_vaccinations)) +
   )
 ```
 
-```{r}
-data_ts <- na.omit(data_ts)
-unitroot_tests(data_ts$weekly_vaccinations)
-ddata <- diff(data_ts$weekly_vaccinations)
-unitroot_tests(ddata)
-
-cases <- read.csv("new_cases.csv")
-uscases <- cases[, c("United.States", "date")]
-tail(uscases$date)
-
-case_ts <- uscases %>%
-  mutate(date = as.Date(date, format = "%Y-%m-%d"))%>%
-  mutate(date = floor_date(date, unit = "week")) %>%
-  group_by(date) %>% 
-  summarize(weekly_cases = sum(United.States), .groups = 'drop') %>% 
-  as_tsibble(index = date)
-
-summary(case_ts)
-na.omit(case_ts)
-
-usvax <- xts(data_ts$weekly_vaccinations, order.by = data_ts$date)
-usinf <- xts(case_ts$weekly_cases, order.by = case_ts$date)
-
-indata_ts <- as.xts(cbind(usvax, usinf))
+```{r Time Series Generation & Stationarity Test}
 indata_ts <- na.omit(indata_ts)
-colnames(indata_ts) <- c("weekly_vax", "weekly_cases")
+unitroot_tests(indata_ts$ln_weekly_vaccinations)
+dindata <- diff(indata_ts$ln_weekly_vaccinations)
+unitroot_tests(dindata)
+  # First diff is stationary
+```
+
+```{r ARIMA Forecast}
+indata_train <- window(indata_ts$ln_weekly_vax, end = "2022-8-28")
+indata_test <- window(indata_ts$ln_weekly_vax, start = "2022-9-4")
 
 acf(indata_ts)
 pacf(indata_ts)
 
-indata_train <- window(indata_ts, end = "2022-11-13")
-indata_test <- window(indata_ts, start = "2022-11-20")
+# Define ranges for parameters
+p_range <- 0:2
+d_range <- 1:1
+q_range <- 0:2
+best_rmse <- 10
+best_model <- NULL
 
-model1 <- auto.arima(indata_train[,"weekly_vax"])
-summary(model1)
-forecast1 <- forecast(model1,h=12)
-accuracy(forecast1)
+for (p in p_range) {
+  for (d in d_range) {
+    for (q in q_range) {
+      # Fit model
+      print(paste(p,d,q))
+      model <- Arima(indata_train$ln_weekly_vax, order=c(p, d, q), seasonal = list(order = c(1, 0, 1), period = 12))
+      # Forecast
+      forecasts <- forecast(model, h=length(indata_test$ln_weekly_vax))
+      # Calculate RMSE
+      rmse <- sqrt(mean((forecasts$mean - indata_test$ln_weekly_vax)^2))
+      print(paste(p,d,q,rmse))
+      
+      # Check if this model is better
+      if (rmse < best_rmse) {
+        best_rmse <- rmse
+        best_model <- model
+        cat(sprintf("New best model found: ARIMA(%s, %s, %s) with RMSE: %f\n", p, d, q, rmse))
+      }
+    }
+  }
+}
 
-lines <- ts(indata_test$weekly_vax, start=c(2022,11), frequency=52)
+arima <- Arima(indata_train, order=c(0,1,0))
+forecast1 <- forecast(arima, indata_test)
+print(accuracy(forecast1))
+```
 
-# Plot the forecast against the actual test data
-plot(forecast1, main="Forecast vs Actual Test Data")
-lines(lines, col='red', lwd=2)
-legend("bottomleft", legend=c("Forecasts", "Actual Test Data"), col=c("blue", "red"), lty=1, lwd=2, cex=0.8)
+```{r Transfer Function Forecast}
+indata_train <- window(indata_ts, end = "2022-08-28")
+indata_test <- window(indata_ts, start = "2022-09-04")
+
+# Fit an ARIMA model to ALTSALES
+arima_fit <- auto.arima(indata_train$ln_weekly_vax, seasonal=TRUE)
+summary(arima_fit)
+checkresiduals(arima_fit)
+forecast_arima <- forecast(arima_fit, h=nrow(indata_test))
+
+# Fit a Transfer Function Model using DPRIME as an exogenous variable
+tf_model <- Arima(indata_train$ln_weekly_vax, order=c(1,1,0),
+                  seasonal = c(1, 0, 0),xreg = indata_train$ln_weekly_cases)
+summary(tf_model)
+checkresiduals(tf_model)
+
+# Forecasting with the Transfer Function Model
+forecast_tf <- forecast(tf_model,xreg = indata_test$ln_weekly_cases)
+plot(forecast_tf)
+
+accuracy(forecast_arima, indata_test$ln_weekly_cases)
+accuracy(forecast_tf, indata_test$ln_weekly_cases)
+
+indata_cases <- ts(indata_ts$ln_weekly_cases, start=c(2020,12), frequency = 52)
+forecast_tf1 <- ts(forecast_tf$fitted, start=c(2022,9), frequency = 52)
+
+plot(indata_cases,col="blue",main="COVID Vaccines Real vs. Forecasted")
+lines(forecast_tf1,col="red")
+```
+
+```{r VAR Forecast}
+# Check for stationarity with Augmented Dickey-Fuller Test
+unitroot_tests(indata_ts$ln_weekly_vax)    
+unitroot_tests(indata_ts$ln_weekly_cases)   
+
+# Fit the VAR model
+# Determine the optimal lag length using information criteria
+lag_selection <- VARselect(indata_ts, lag.max = 12, type = "both")
+optimal_lag <- lag_selection$selection["AIC(n)"]
+
+var_model <- VAR(indata_ts, p = optimal_lag, type = "both")
+summary(var_model)
+
+# Granger Causality Test
+granger_cases <- causality(var_model, cause = "ln_weekly_cases")
+print(granger_cases)
+
+granger_vax <- causality(var_model, cause = "ln_weekly_vax")
+print(granger_vax)
+
+# Impulse resopnse functions
+irf_results_vax <- irf(var_model,
+                    response = "ln_weekly_vax", impulse = "ln_weekly_cases",
+                    n.ahead = 12, boot = TRUE)
+plot(irf_results_vax)
+
+irf_results_cases <- irf(var_model,
+                    response = "ln_weekly_cases", impulse = "ln_weekly_vax",
+                    n.ahead = 12, boot = TRUE)
+plot(irf_results_cases)
+
+# Forecasting future values
+forecasts <- predict(var_model, n.ahead = 12)
+plot(forecasts$fcst$ln_weekly_cases)
+plot(forecasts$fcst$ln_weekly_vax)
+
+# Extract point forecasts and confidence intervals
+lower_ci <- forecasts$fcst$ln_weekly_cases[, "lower"]
+upper_ci <- forecasts$fcst$ln_weekly_cases[, "upper"]
+point_forecasts <- forecasts$fcst$ln_weekly_cases[, "fcst"]
+
+# Example using base R's plot function
+time_index <- seq(along = point_forecasts)
+matplot(time_index, cbind(point_forecasts, lower_ci, upper_ci), type = 'l', lty = c(1, 2, 2),
+        col = c("blue", "red", "red"), xlab = "Time", ylab = "Forecast and Confidence Interval",
+        main = "Forecast of Weekly COVID Cases")
+legend("topright", legend = c("Forecast", "Lower 95% CI", "Upper 95% CI"), col = c("blue", "red", "red"), lty = c(1, 2, 2))
+```
+
+```{r Random Forest Forecast}
+indata_test_y <- window(indata_ts[,-1], start = "2022-09-04")
+
+# Define the number of lags
+lags <- 12
+
+# Create lagged variables 
+y_var <- indata_ts[, 1]  # Assuming the first column is the target variable
+lagged_y <- do.call(cbind, lapply(1:lags, function(k) stats::lag(y_var, -k)))
+colnames(lagged_y) <- c(paste0("y", 1:lags))
+
+c_var <- indata_ts[, 2]  # Assuming the first column is the target variable
+lagged_c <- do.call(cbind, lapply(1:lags, function(k) stats::lag(c_var, -k)))
+colnames(lagged_c) <- c(paste0("c", 1:lags))
+
+y_lags <- cbind(y_var, lagged_y ,lagged_c)
+y_lags <- na.omit(y_lags)
+colnames(y_lags) <- c("y", paste0("y", 1:lags),paste0("c", 1:lags))
+
+# Split the data into training and testing sets
+rfdata_train <- window(y_lags, end = "2022-08-28")
+rfdata_test  <- window(y_lags, start = "2022-09-04")
+
+# Fit a Random Forest model
+oob.values <- vector(length=24)
+for(i in 1:24) {
+  temp.model <- randomForest(y ~ ., data = rfdata_train, ntree = 1000, mtry=i)
+  oob.values[i] <- temp.model$mse }
+cbind(1:24,oob.values)
+plot(oob.values, col="red")
+
+rf_model <- randomForest(y ~ ., data = rfdata_train, ntree = 1000, mtry=15)
+Error.rate = rf_model$mse
+plot(Error.rate, col="red")
+
+# Further Tests on mtry uing Out of Bag Error. Lower number is better 
+  # mtry is number of 'bags' or variables to include in the model
+
+rf_model1 <- randomForest(y ~ ., data = rfdata_train, ntree = 1000, mtry = 15)
+# Make predictions on the test data
+forecast_rf <- predict(rf_model1, newdata = rfdata_test, n.ahead = 36)
+accuracy(forecast_rf,indata_test_y)
+
+# DEBUGGING ____________________
+print(length(forecast_rf))
+print(length(indata_test_y$ln_weekly_cases))
+
+# Random Forest Model with exogenous variables and lags
+
+y_xlags <- cbind(c_var, lagged_c)
+y_xlags <- na.omit(y_xlags)
+colnames(y_xlags) <- c("c", paste0("c", 1:lags))
+
+# Split the data into training and testing sets
+rfdata_xtrain <- window(y_xlags, end = "2022-8-28")
+rfdata_xtest  <- window(y_xlags, start = "2022-9-4")
+
+rf_model2 <- randomForest(c ~ ., data = rfdata_xtrain, ntree = 1000 , mtry = 15)
+# Make predictions on the test data
+forecast5 <- predict(rf_model2, newdata = rfdata_xtest)
+accuracy(forecast5,indata_test_y)
 ```
 
