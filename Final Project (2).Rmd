@@ -225,15 +225,15 @@ indata_test_y <- indata_test[,1]
 # Define the number of lags
 lags <- 24
 # Create lagged variables
-y_var <- indata_ts[, 1]  # Assuming the first column is the target variable
+y_var <- dindata[, 1]  # Assuming the first column is the target variable
 lagged_y <- do.call(cbind, lapply(1:lags, function(k) stats::lag(y_var, -k)))
 colnames(lagged_y) <- c(paste0("y", 1:lags))
 #
-u_var <- indata_ts[, 2]  # Assuming the first column is the target variable
+u_var <- dindata[, 2]  # Assuming the first column is the target variable
 lagged_u <- do.call(cbind, lapply(1:lags, function(k) stats::lag(u_var, -k)))
 colnames(lagged_u) <- c(paste0("u", 1:lags))
 
-i_var <- indata_ts[, 3]  # Assuming the first column is the target variable
+i_var <- dindata[, 3]  # Assuming the first column is the target variable
 lagged_i <- do.call(cbind, lapply(1:lags, function(k) stats::lag(i_var, -k)))
 colnames(lagged_i) <- c(paste0("i", 1:lags))
 
@@ -254,13 +254,13 @@ for(i in 1:24) {
 cbind(1:24,oob.values)
 plot(oob.values, col="red")
 
-rf_model <- randomForest(y ~ ., data = rfdata_train, ntree = 1000, mtry=3)
+rf_model <- randomForest(y ~ ., data = rfdata_train, ntree = 90, mtry=6)
 Error.rate = rf_model$mse
 plot(Error.rate, col="red")
 
 
 # Further Tests on mtry uing Out of Bag Error. Lower number is better 
-rf_model1 <- randomForest(y ~ ., data = rfdata_train, ntree = 200, mtry = 3)
+rf_model1 <- randomForest(y ~ ., data = rfdata_train, ntree = 90, mtry = 6)
 # Make predictions on the test data
 forecast4 <- predict(rf_model1, newdata = rfdata_test)
 accuracy(forecast4,indata_test_y)
@@ -290,7 +290,7 @@ models <- vector("list", niter)
 # Repeat the process 1000 times
 for (i in 1:niter) {
   # Train the random forest model
-  rf_model2 <- randomForest(y ~ ., data = rfdata_xtrain, ntree = 400, mtry = 4)
+  rf_model2 <- randomForest(y ~ ., data = rfdata_xtrain, ntree = 90, mtry = 6)
   
   # Make predictions on the test data
   forecast6 <- predict(rf_model2, newdata = rfdata_xtest)
