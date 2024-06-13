@@ -372,7 +372,7 @@ actual_values_df <- data.frame(Date = as.Date(test_dates), Actual = as.numeric(i
 ggplot() +
   geom_line(data = actual_values_df, aes(x = Date, y = Actual), color = "black", size = 1) +
   geom_line(data = combined_forecasts, aes(x = Date, y = Forecast, color = Model), size = 1) +
-  labs(title = "Comparison of Forecast Models for Median Home Prices", x = "Date", y = "Home Price") +
+  labs(title = "Comparison of Forecast Models for COVID Vaccinations", x = "Date", y = "Vaccinations (Differenced)") +
   scale_color_manual(values = c("ARIMA" = "blue", "ARIMA with Exogenous" = "red", "VAR" = "green", 
                                 "Random Forest" = "purple", "Random Forest with Exogenous" = "orange", 
                                 "Best Random Forest" = "brown")) +
@@ -390,7 +390,7 @@ actual_values_df <- data.frame(Date = as.Date(test_dates), Actual = as.numeric(i
 ggplot() +
   geom_line(data = actual_values_df, aes(x = Date, y = Actual), color = "black", size = 1) +
   geom_line(data = combined_forecasts, aes(x = Date, y = Forecast, color = Model), size = 1) +
-  labs(title = "Comparison of Forecast Models for Median Home Prices", x = "Date", y = "Home Price") +
+  labs(title = "Comparison of Forecast Models for COVID Vaccinations", x = "Date", y = "Vaccinations (Differenced)") +
   scale_color_manual(values = c("ARIMA" = "blue", "ARIMA with Exogenous" = "red", "VAR" = "green")) +
   theme_minimal()
 
