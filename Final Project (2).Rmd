@@ -352,9 +352,11 @@ accuracy_summary <- data.frame(
 kable(accuracy_summary, caption = "Forecast Accuracy Metrics") %>%
   kable_styling(bootstrap_options = c("striped", "hover", "condensed"), full_width = F)
 
+start_test_date <- as.Date("2022-09-18")
+end_test_date <- start_test_date + (length(indata_test_y) - 1) * 7  
+test_dates <- seq.Date(start_test_date, end_test_date, by="week")
 
-length(forecast3$forecast$ln_weekly_vax$mean)
-# Create data frames for each forecast
+
 forecast1_df <- data.frame(Date = as.Date(test_dates), Forecast = as.numeric(fcst_arima$mean), Model = "ARIMA")
 forecast2_df <- data.frame(Date = as.Date(test_dates), Forecast = as.numeric(forecast2$mean), Model = "ARIMA with Exogenous")
 forecast3_df <- data.frame(Date = as.Date(test_dates), Forecast = as.numeric(forecast3$forecast$ln_weekly_vax$mean), Model = "VAR")
