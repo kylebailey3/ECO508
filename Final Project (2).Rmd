@@ -1,0 +1,398 @@
+---
+title: "Final Project"
+author: "Kyle Bailey"
+date: "2024-06-04"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+library(dplyr)
+library(ggplot2)
+library(tidyverse)
+library(tsibble)
+library(fable)
+library(vars)
+library(lmtest)
+library(gridExtra)
+library(kableExtra)
+library(zoo)
+library(gtrendsR)
+library(quantmod)
+library(PerformanceAnalytics)
+library(forecast)
+library(randomForest)
+library(tseries)
+library(xts)
+library(lubridate)
+source("https://bigblue.depaul.edu/jlee141/econdata/R/func_tslib.R")
+```
+
+```{r Data Cleaning}
+setwd("C:/Users/elgin/Downloads")
+
+# US vaccination data            
+data <- read.csv("vaccinations.csv")
+usdata <- data %>% filter(iso_code == "USA")
+usdata <- usdata[,c(3,9)]
+
+vax_ts <- usdata %>%
+  mutate(date = as.Date(date, format = "%Y-%m-%d"))%>%
+  mutate(date = floor_date(date, unit = "week")) %>%
+  group_by(date) %>% 
+  summarize(weekly_vaccinations = sum(daily_vaccinations), .groups = 'drop') %>% 
+  as_tsibble(index = date)
+
+vax_ts <- vax_ts %>% 
+  mutate(ln_weekly_vaccinations = log(vax_ts$weekly_vaccinations))
+
+# US case data
+cases <- read.csv("new_cases.csv")
+uscases <- cases[, c("United.States", "date")]
+
+case_ts <- uscases %>%
+  mutate(date = as.Date(date, format = "%Y-%m-%d"))%>%
+  mutate(date = floor_date(date, unit = "week")) %>%
+  group_by(date) %>% 
+  summarize(weekly_cases = sum(United.States), .groups = 'drop') %>%
+  mutate(ln_weekly_cases = log(weekly_cases)) %>% 
+  as_tsibble(index = date) %>% 
+  na.omit(uscases)
+
+# US Google trends data
+trends <- gtrends(c("vaccine"),geo=c("US"),time="2020-12-20 2023-05-08")
+trends <- xts(trends$interest_over_time$hits, order.by = trends$interest_over_time$date)
+
+# Merge data
+usvax <- xts(vax_ts$ln_weekly_vaccinations, order.by = vax_ts$date)
+usinf <- xts(case_ts$ln_weekly_cases, order.by = case_ts$date)
+
+indata_ts <- as.xts(cbind(usvax, usinf, trends))
+indata_ts <- na.omit(indata_ts)
+colnames(indata_ts) <- c("ln_weekly_vax", "ln_weekly_cases", "weekly_trends_hits")
+
+indata_ts <- ts(indata_ts, start = c(2020,52), end = c(2023,19), frequency = 52)
+```
+
+```{r Plots}
+# Base plot
+ggplot(vax_ts, aes(x = date, y = ln_weekly_vaccinations)) +
+  geom_line() +
+  labs(title = "Weekly Vaccinations Over Time in the U.S.",
+       x = "Date",
+       y = "Weekly Vaccinations") +
+  theme_minimal()
+
+# B/W plot
+ggplot(vax_ts, aes(x = date, y = ln_weekly_vaccinations)) +
+  geom_line(color = "white") +  # Set line color to white
+  labs(title = "Weekly Vaccinations Over Time in the US",
+       x = "Date",
+       y = "Weekly Vaccinations") +
+  theme_minimal(base_family = "Helvetica") +
+  theme(
+    panel.background = element_rect(fill = "black"),  # Background color
+    plot.background = element_rect(fill = "black"),   # Plot area background color
+    panel.grid.major = element_line(color = "black"), # Major grid lines color
+    panel.grid.minor = element_line(color = "black"), # Minor grid lines color
+    axis.text = element_text(color = "white"),        # Axis text color
+    axis.title = element_text(color = "white"),       # Axis titles color
+    plot.title = element_text(color = "white")        # Plot title color
+  )
+```
+
+```{r Time Series Generation & Stationarity Test}
+indata_ts <- na.omit(indata_ts)
+unitroot_tests(indata_ts$ln_weekly_vax)
+# Note: Sometimes these unitroot tests don't run, sometimes they do, we don't know why
+dindata <- diff(indata_ts) %>% 
+  na.omit(dindata)
+unitroot_tests(dindata)
+  # First diff is stationary
+```
+
+```{r ARIMA Forecast}
+# 80/20 train/test split
+indata_train <- window(dindata, end = c(2022,36))
+indata_test <- window(dindata, start = c(2022,37))
+
+acf(dindata)
+pacf(dindata)
+
+# Run for best ARIMA parameters based on lowest RMSE
+# Define ranges for parameters
+p_range <- 0:2
+d_range <- 1:1
+q_range <- 0:2
+best_rmse <- 10
+best_model <- NULL
+
+for (p in p_range) {
+  for (d in d_range) {
+    for (q in q_range) {
+      # Fit model
+      print(paste(p,d,q))
+      model <- Arima(indata_train[,1], order=c(p, d, q), seasonal = list(order = c(0, 0, 0), period = 52))
+      # Forecast
+      forecasts <- forecast(model, h=length(indata_test[,1]))
+      # Calculate RMSE
+      rmse <- sqrt(mean((forecasts$mean - indata_test[,1])^2))
+      print(paste(p,d,q,rmse))
+      
+      # Check if this model is better
+      if (rmse < best_rmse) {
+        best_rmse <- rmse
+        best_model <- model
+        cat(sprintf("New best model found: ARIMA(%s, %s, %s) with RMSE: %f\n", p, d, q, rmse))
+      }
+    }
+  }
+}
+
+# Best model
+arima <- Arima(indata_train[,1], order=c(1,1,1), seasonal = c(1,0,1))
+fcst_arima <- forecast(arima, h=(length(indata_test[,1])))
+print(accuracy(fcst_arima))
+
+
+
+# PLOT HERE ______________________________
+```
+
+
+```{r Transfer Function Forecast}
+exog_train <- indata_train[,2:3]
+exog_test  <- indata_test[,2:3]
+model2 <- auto.arima(indata_train[,"ln_weekly_vax"],xreg =exog_train )
+forecast2 <- forecast(model2,h=52,xreg=exog_test)
+
+summary(model2)
+checkresiduals(model2)
+
+
+
+```
+
+
+```{r VAR Forecast}
+# Check for stationarity with Augmented Dickey-Fuller Test
+unitroot_tests(indata_ts[,1])    
+unitroot_tests(indata_ts[,2])
+unitroot_tests(indata_ts[,3])
+
+unitroot_tests(dindata[,1])    
+unitroot_tests(dindata[,2])
+unitroot_tests(dindata[,3])
+
+# Fit the VAR model
+# Determine the optimal lag length using information criteria
+lag_selection <- VARselect(indata_train, lag.max = 12, type = "both")
+  optimal_lag <- lag_selection$selection["AIC(n)"]
+
+var_model <- VAR(indata_train, p = optimal_lag, type = "both")
+summary(var_model)
+forecast3 <- forecast(var_model,h=35)
+
+
+# Granger Causality Test
+granger_vax <- causality(var_model, cause = "ln_weekly_vax")
+  print(granger_vax)
+
+granger_cases <- causality(var_model, cause = "ln_weekly_cases")
+  print(granger_cases)
+
+granger_trend <- causality(var_model, cause = "weekly_trends_hits")
+  print(granger_trend)
+
+# Impulse response functions
+irf_results_cases <- irf(var_model,
+                    response = "ln_weekly_vax", impulse = "ln_weekly_cases",
+                    n.ahead = 12, boot = TRUE)
+plot(irf_results_cases)
+
+irf_results_trend <- irf(var_model,
+                    response = "ln_weekly_vax", impulse = "weekly_trends_hits",
+                    n.ahead = 12, boot = TRUE)
+plot(irf_results_trend)
+
+# Forecasting future 
+```
+
+
+```{r Random Forest Forecast}
+# Random Forest Model with lags and other exogenous variables 
+indata_test_y <- indata_test[,1]
+
+# Define the number of lags
+lags <- 24
+# Create lagged variables
+y_var <- indata_ts[, 1]  # Assuming the first column is the target variable
+lagged_y <- do.call(cbind, lapply(1:lags, function(k) stats::lag(y_var, -k)))
+colnames(lagged_y) <- c(paste0("y", 1:lags))
+#
+u_var <- indata_ts[, 2]  # Assuming the first column is the target variable
+lagged_u <- do.call(cbind, lapply(1:lags, function(k) stats::lag(u_var, -k)))
+colnames(lagged_u) <- c(paste0("u", 1:lags))
+
+i_var <- indata_ts[, 3]  # Assuming the first column is the target variable
+lagged_i <- do.call(cbind, lapply(1:lags, function(k) stats::lag(i_var, -k)))
+colnames(lagged_i) <- c(paste0("i", 1:lags))
+
+y_lags <- cbind(y_var, lagged_y,lagged_u,lagged_i)
+y_lags <- na.omit(y_lags)
+colnames(y_lags) <- c("y", paste0("y", 1:lags),paste0("u", 1:lags),paste0("i", 1:lags))
+
+# Split the data into training and testing sets
+rfdata_train <- window(y_lags,end=c(2022,36))
+rfdata_test  <- window(y_lags,start=c(2022,37))
+
+# Fit a Random Forest model
+# Further Tests on mtry uing Out of Bag Error. Lower number is better oob.values <- vector(length=12)
+oob.values <- vector(length=24)
+for(i in 1:24) {
+  temp.model <- randomForest(y ~ ., data = rfdata_train, ntree = 1000, mtry=i)
+  oob.values[i] <- temp.model$mse }
+cbind(1:24,oob.values)
+plot(oob.values, col="red")
+
+rf_model <- randomForest(y ~ ., data = rfdata_train, ntree = 1000, mtry=3)
+Error.rate = rf_model$mse
+plot(Error.rate, col="red")
+
+
+# Further Tests on mtry uing Out of Bag Error. Lower number is better 
+rf_model1 <- randomForest(y ~ ., data = rfdata_train, ntree = 200, mtry = 3)
+# Make predictions on the test data
+forecast4 <- predict(rf_model1, newdata = rfdata_test)
+accuracy(forecast4,indata_test_y)
+
+
+# Random Forest Model with exogenous variables and lags
+
+y_xlags <- cbind(y_var, u_var, i_var, lagged_y,lagged_u,lagged_i)
+y_xlags <- na.omit(y_xlags)
+colnames(y_xlags) <- c("y", "u", "i", paste0("y", 1:lags),paste0("u", 1:lags),paste0("i", 1:lags))
+
+# Split the data into training and testing sets
+rfdata_xtrain <- window(y_xlags,end=c(2022,36))
+rfdata_xtest  <- window(y_xlags,start=c(2022,37))
+
+rf_model2 <- randomForest(y ~ ., data = rfdata_xtrain, ntree = 200 , mtry = 3)
+# Make predictions on the test data
+forecast5 <- predict(rf_model2, newdata = rfdata_xtest)
+accuracy(forecast5,indata_test_y)
+```
+```{r Random Forest Forecast II}
+# Initialize vectors to store RMSE values and models
+niter <- 100
+rmse_values <- numeric(niter)
+models <- vector("list", niter)
+
+# Repeat the process 1000 times
+for (i in 1:niter) {
+  # Train the random forest model
+  rf_model2 <- randomForest(y ~ ., data = rfdata_xtrain, ntree = 400, mtry = 4)
+  
+  # Make predictions on the test data
+  forecast6 <- predict(rf_model2, newdata = rfdata_xtest)
+  
+  # Calculate the RMSE and store it in the vector
+  rmse_values[i] <- accuracy(forecast6, indata_test_y)[, "RMSE"]
+  
+  # Store the model
+  models[[i]] <- rf_model2
+}
+
+# Find the best-performing model (with the lowest RMSE)
+best_model_index <- which.min(rmse_values)
+best_model <- models[[best_model_index]]
+best_rmse <- rmse_values[best_model_index]
+
+# Print the best RMSE and the corresponding model index
+print(paste("Best RMSE:", best_rmse))
+print(paste("Best Model Index:", best_model_index))
+
+# Save the best model
+saveRDS(best_model, file = "best_rf_model.rds")
+
+# Plot the RMSE values
+plot(rmse_values, type = "b", col = "blue", pch = 19, lwd = 2,
+     main = "RMSE values over 1000 iterations",
+     xlab = "Iteration", ylab = "RMSE")
+
+forecast6 <- predict(best_model, newdata = rfdata_xtest)
+accuracy(forecast6, indata_test_y)
+
+# Find the RMSE of best 10 models from the Random Forest Models
+best10_model_indices <- order(rmse_values)[1:10]
+best10_rmse_values <- rmse_values[best10_model_indices]
+best10_rmse_values 
+
+```
+
+```{r Model Comparisons}
+library(kableExtra)
+
+
+# Calculate RMSE and MAE for each forecast
+accuracy1 <- accuracy(fcst_arima, indata_test_y)
+accuracy2 <- accuracy(forecast2, indata_test_y)
+accuracy3 <- accuracy(forecast3$forecast$ln_weekly_vax,indata_test_y)
+accuracy4 <- accuracy(forecast4, indata_test_y)
+accuracy5 <- accuracy(forecast5, indata_test_y)
+accuracy6 <- accuracy(forecast6, indata_test_y)
+
+# Create a summary table
+accuracy_summary <- data.frame(
+  Model = c("ARIMA", "Transfer", "VAR3", "RandomForest","RandomForest_exo","RandomForest_Best"),
+  RMSE = c(accuracy1[1, "RMSE"], accuracy2[1, "RMSE"], accuracy3[1, "RMSE"], accuracy4[1, "RMSE"], accuracy5[1, "RMSE"], accuracy6[1, "RMSE"]),
+  MAE = c(accuracy1[1, "MAE"], accuracy2[1, "MAE"], accuracy3[1, "MAE"], accuracy4[1, "MAE"],accuracy5[1, "MAE"], accuracy6[1, "MAE"])
+)
+
+# Print the summary table using kableExtra
+kable(accuracy_summary, caption = "Forecast Accuracy Metrics") %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed"), full_width = F)
+
+
+length(forecast3$forecast$ln_weekly_vax$mean)
+# Create data frames for each forecast
+forecast1_df <- data.frame(Date = as.Date(test_dates), Forecast = as.numeric(fcst_arima$mean), Model = "ARIMA")
+forecast2_df <- data.frame(Date = as.Date(test_dates), Forecast = as.numeric(forecast2$mean), Model = "ARIMA with Exogenous")
+forecast3_df <- data.frame(Date = as.Date(test_dates), Forecast = as.numeric(forecast3$forecast$ln_weekly_vax$mean), Model = "VAR")
+forecast4_df <- data.frame(Date = as.Date(test_dates), Forecast = as.numeric(forecast4), Model = "Random Forest")
+forecast5_df <- data.frame(Date = as.Date(test_dates), Forecast = as.numeric(forecast5), Model = "Random Forest with Exogenous")
+forecast6_df <- data.frame(Date = as.Date(test_dates), Forecast = as.numeric(forecast6), Model = "Best Random Forest")
+
+# Combine all forecast data frames
+combined_forecasts <- bind_rows(forecast1_df, forecast2_df, forecast3_df, forecast4_df, forecast5_df, forecast6_df)
+
+# Create actual values data frame
+actual_values_df <- data.frame(Date = as.Date(test_dates), Actual = as.numeric(indata_test_y))
+
+# Plotting using ggplot2
+ggplot() +
+  geom_line(data = actual_values_df, aes(x = Date, y = Actual), color = "black", size = 1) +
+  geom_line(data = combined_forecasts, aes(x = Date, y = Forecast, color = Model), size = 1) +
+  labs(title = "Comparison of Forecast Models for Median Home Prices", x = "Date", y = "Home Price") +
+  scale_color_manual(values = c("ARIMA" = "blue", "ARIMA with Exogenous" = "red", "VAR" = "green", 
+                                "Random Forest" = "purple", "Random Forest with Exogenous" = "orange", 
+                                "Best Random Forest" = "brown")) +
+  theme_minimal()
+
+```
+```{r Model Comparison without Random Forest}
+# Combine all forecast data frames
+combined_forecasts <- bind_rows(forecast1_df, forecast2_df, forecast3_df)
+
+# Create actual values data frame
+actual_values_df <- data.frame(Date = as.Date(test_dates), Actual = as.numeric(indata_test_y))
+
+# Plotting using ggplot2
+ggplot() +
+  geom_line(data = actual_values_df, aes(x = Date, y = Actual), color = "black", size = 1) +
+  geom_line(data = combined_forecasts, aes(x = Date, y = Forecast, color = Model), size = 1) +
+  labs(title = "Comparison of Forecast Models for Median Home Prices", x = "Date", y = "Home Price") +
+  scale_color_manual(values = c("ARIMA" = "blue", "ARIMA with Exogenous" = "red", "VAR" = "green")) +
+  theme_minimal()
+
+```
+
